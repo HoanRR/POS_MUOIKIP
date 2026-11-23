@@ -49,32 +49,32 @@ fun PaymentScreen(
     Row(Modifier.fillMaxSize().padding(24.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
         // ---------- Items ----------
         Column(Modifier.weight(1.3f).fillMaxHeight().background(Color.White).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Kiểm tra món – ${table.label}", fontSize = 30.sp, fontWeight = FontWeight.Black)
+            Text("Kiểm tra món – ${table.label}", style = typeFor(30), fontWeight = FontWeight.Black)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Text("Món", fontSize = 20.sp, color = PosColors.Muted, modifier = Modifier.weight(1f))
-                Text("SL", fontSize = 20.sp, color = PosColors.Muted, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
-                Text("Thành tiền", fontSize = 20.sp, color = PosColors.Muted, modifier = Modifier.width(170.dp), textAlign = TextAlign.End)
+                Text("Món", style = typeFor(20), color = PosColors.Muted, modifier = Modifier.weight(1f))
+                Text("SL", style = typeFor(20), color = PosColors.Muted, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
+                Text("Thành tiền", style = typeFor(20), color = PosColors.Muted, modifier = Modifier.width(170.dp), textAlign = TextAlign.End)
             }
             HorizontalDivider()
             LazyColumn(Modifier.weight(1f)) {
                 items(order?.order?.lines.orEmpty().sortedBy { it.seq }, key = { it.id }) { l ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(l.name, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                            Text(l.unitPrice?.let { formatVnd(it) } ?: "Chưa nhập giá", fontSize = 20.sp,
+                            Text(l.name, style = typeFor(26), fontWeight = FontWeight.Bold)
+                            Text(l.unitPrice?.let { formatVnd(it) } ?: "Chưa nhập giá", style = typeFor(20),
                                 color = if (l.unitPrice == null) PosColors.Danger else PosColors.Muted)
                         }
-                        Text("${l.quantity}", fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
-                        Text(l.amount?.let { formatVnd(it) } ?: "—", fontSize = 26.sp, fontWeight = FontWeight.Bold,
+                        Text("${l.quantity}", style = typeFor(28), fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
+                        Text(l.amount?.let { formatVnd(it) } ?: "—", style = typeFor(26), fontWeight = FontWeight.Bold,
                             modifier = Modifier.width(170.dp), textAlign = TextAlign.End)
                     }
                     HorizontalDivider()
                 }
                 if (order?.roomFee != null) {
                     item {
-                        Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(order.roomFeeLabel ?: "Tiền phòng", fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            Text(formatVnd(order.roomFee), fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(170.dp), textAlign = TextAlign.End)
+                        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(order.roomFeeLabel ?: "Tiền phòng", style = typeFor(24), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            Text(formatVnd(order.roomFee), style = typeFor(26), fontWeight = FontWeight.Bold, modifier = Modifier.width(170.dp), textAlign = TextAlign.End)
                         }
                     }
                 }
@@ -83,10 +83,10 @@ fun PaymentScreen(
 
         // ---------- Total & print ----------
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            Text("Tổng tiền", fontSize = 30.sp, color = PosColors.Muted)
-            Text(formatVnd(order?.total ?: 0), fontSize = 80.sp, fontWeight = FontWeight.Black)
+            Text("Tổng tiền", style = typeFor(30), color = PosColors.Muted)
+            Text(formatVnd(order?.total ?: 0), style = typeFor(80), fontWeight = FontWeight.Black)
             if (engine.bankAccount() != null) {
-                Text("Hóa đơn có mã QR để khách chuyển khoản.", fontSize = 22.sp, color = PosColors.Muted)
+                Text("Hóa đơn có mã QR để khách chuyển khoản.", style = typeFor(22), color = PosColors.Muted)
             }
             Spacer(Modifier.weight(1f))
             BigButton(

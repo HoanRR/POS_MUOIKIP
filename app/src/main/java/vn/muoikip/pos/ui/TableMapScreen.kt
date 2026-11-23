@@ -18,6 +18,13 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,7 +67,7 @@ fun TableMapScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("MƯỜI KIP", fontSize = 30.sp, fontWeight = FontWeight.Black, color = PosColors.Ink)
+            Text("MƯỜI KIP", style = typeFor(30), fontWeight = FontWeight.Black, color = PosColors.Ink)
             Spacer(Modifier.width(8.dp))
             zones.forEach { z ->
                 val busy = engine.tables(z.id).count { it.occupied }
@@ -90,13 +97,15 @@ fun TableMapScreen(
             }
             item {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = PosColors.Background,
-                    border = BorderStroke(3.dp, PosColors.Primary),
-                    modifier = Modifier.height(170.dp).clickable { addingTable = true },
+                    onClick = { addingTable = true },
+                    shape = MaterialTheme.shapes.large,
+                    color = PosColors.PrimarySoft,
+                    border = BorderStroke(2.dp, PosColors.Primary),
+                    modifier = Modifier.height(170.dp),
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(if (zone.timed) "+ Thêm phòng" else "+ Thêm bàn", fontSize = 24.sp, color = PosColors.Primary, fontWeight = FontWeight.Bold)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Icon(Icons.Filled.Add, contentDescription = null, tint = PosColors.Primary, modifier = Modifier.size(48.dp))
+                        Text(if (zone.timed) "Thêm phòng" else "Thêm bàn", style = MaterialTheme.typography.titleMedium, color = PosColors.Primary)
                     }
                 }
             }
@@ -122,7 +131,7 @@ fun TableMapScreen(
         } else {
             ConfirmDialog(
                 message = "Thêm Bàn $nextNo vào khu ${zone.name}?",
-                confirmText = "Thêm",
+                confirmText = "Thêm bàn",
                 confirmColor = PosColors.Pay,
                 onDismiss = { addingTable = false },
                 onConfirm = { engine.addTable(zone.id); addingTable = false },
@@ -144,31 +153,44 @@ fun TableMapScreen(
     }
 }
 
+/**
+ * Status is never colour alone: a busy table also gets an icon + "Có khách" label and a thicker
+ * border; an empty one says "Trống".
+ */
 @Composable
 private fun TableTile(t: TableView, onClick: () -> Unit) {
+    val ink = if (t.occupied) PosColors.TableBusyInk else PosColors.Ink
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        onClick = onClick,
+        shape = MaterialTheme.shapes.large,
         color = if (t.occupied) PosColors.TableBusy else PosColors.TableEmpty,
-        border = BorderStroke(3.dp, if (t.occupied) Color(0xFFE65100) else Color(0xFFBDBDBD)),
-        modifier = Modifier.height(170.dp).clickable(onClick = onClick),
+        border = BorderStroke(if (t.occupied) 4.dp else 2.dp, if (t.occupied) PosColors.TableBusyBorder else PosColors.Border),
+        shadowElevation = if (t.occupied) 2.dp else 0.dp,
+        modifier = Modifier.height(170.dp).semantics(mergeDescendants = true) {},
     ) {
         Column(
-            Modifier.padding(8.dp),
+            Modifier.padding(Space.s),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
                 if (t.zone.timed) "${t.zone.name} ${t.table.number}" else "${t.table.number}",
-                fontSize = if (t.zone.timed) 34.sp else 52.sp,
-                fontWeight = FontWeight.Black,
-                color = PosColors.Ink,
+                style = if (t.zone.timed) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayMedium,
+                color = ink,
             )
             if (t.occupied) {
-                Text(formatVnd(t.total), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = PosColors.Ink)
-                t.elapsedMs?.let { Text(elapsedText(it), fontSize = 20.sp, color = PosColors.Ink) }
-                if (t.hasMissingPrices) Text("Chưa nhập giá", fontSize = 18.sp, color = PosColors.Danger, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Person, contentDescription = null, tint = ink, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(Space.xs))
+                    Text("Có khách", style = MaterialTheme.typography.labelMedium, color = ink)
+                }
+                Text(formatVnd(t.total), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = ink)
+                t.elapsedMs?.let { Text(elapsedText(it), style = MaterialTheme.typography.bodyMedium, color = ink) }
+                if (t.hasMissingPrices) {
+                    Text("Chưa nhập giá", style = MaterialTheme.typography.labelMedium, color = PosColors.Danger)
+                }
             } else {
-                Text("Trống", fontSize = 20.sp, color = PosColors.Muted)
+                Text("Trống", style = MaterialTheme.typography.bodyMedium, color = PosColors.Muted)
             }
         }
     }

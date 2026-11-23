@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -67,10 +68,10 @@ fun OrderScreen(
         // ---------- Menu (left) ----------
         Column(Modifier.weight(0.56f).fillMaxHeight().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                BigButton("← Sơ đồ bàn", onBack, color = PosColors.Selected)
-                Text(table.label, fontSize = 32.sp, fontWeight = FontWeight.Black)
+                BigButton("← Sơ đồ bàn", onBack, color = PosColors.Primary)
+                Text(table.label, style = typeFor(32), fontWeight = FontWeight.Black)
             }
-            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 categories.forEach { c ->
                     val sel = c.id == categoryId
                     BigButton(
@@ -83,23 +84,35 @@ fun OrderScreen(
             }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(engine.menu(categoryId), key = { it.id }) { item ->
+                    // Immediate feedback: the tile shows how many of this item the table already has.
+                    val onTable = order?.order?.lines?.filter { it.menuItemId == item.id }?.sumOf { it.quantity } ?: 0
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.White,
-                        shadowElevation = 2.dp,
-                        modifier = Modifier.height(110.dp).clickable { engine.addItem(tableId, item.id) },
+                        onClick = { engine.addItem(tableId, item.id) },
+                        shape = MaterialTheme.shapes.medium,
+                        color = if (onTable > 0) PosColors.PrimarySoft else PosColors.Surface,
+                        border = androidx.compose.foundation.BorderStroke(
+                            if (onTable > 0) 3.dp else 1.dp,
+                            if (onTable > 0) PosColors.Primary else PosColors.Border,
+                        ),
+                        modifier = Modifier.height(112.dp),
                     ) {
-                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                            Text(item.name, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2)
-                            Text(
-                                item.price?.let { formatVnd(it) } ?: "Giá nhập khi bán",
-                                fontSize = 20.sp,
-                                color = if (item.price == null) PosColors.Danger else PosColors.Muted,
-                            )
+                        Column(Modifier.padding(Space.m), verticalArrangement = Arrangement.SpaceBetween) {
+                            Text(item.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, maxLines = 2)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    item.price?.let { formatVnd(it) } ?: "Giá nhập khi bán",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (item.price == null) PosColors.Danger else PosColors.Muted,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (onTable > 0) {
+                                    Text("Đã gọi $onTable", style = MaterialTheme.typography.labelMedium, color = PosColors.Primary)
+                                }
+                            }
                         }
                     }
                 }
@@ -111,14 +124,14 @@ fun OrderScreen(
             Modifier.weight(0.44f).fillMaxHeight().background(Color.White).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 BigButton("Chuyển bàn", { picking = "move" }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp, fontSize = 20, enabled = order != null)
                 BigButton("Gộp bàn", { picking = "merge" }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp, fontSize = 20,
                     enabled = order != null && !table.zone.timed)
-                table.elapsedMs?.let { Text("Đã ngồi: ${elapsedText(it)}", fontSize = 22.sp, color = PosColors.Muted) }
+                table.elapsedMs?.let { Text("Đã ngồi: ${elapsedText(it)}", style = typeFor(22), color = PosColors.Muted) }
             }
             if (order == null || (order.order.lines.isEmpty() && order.roomFee == null)) {
-                Text("Chưa có món. Chạm vào món bên trái để thêm.", fontSize = 24.sp, color = PosColors.Muted, modifier = Modifier.weight(1f))
+                Text("Chưa có món. Chạm vào món bên trái để thêm.", style = typeFor(24), color = PosColors.Muted, modifier = Modifier.weight(1f))
             } else {
                 LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(order.order.lines.sortedBy { it.seq }, key = { it.id }) { line ->
@@ -140,8 +153,8 @@ fun OrderScreen(
                                 Modifier.fillMaxWidth().clickable { editRoomFee = true }.padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(order.roomFeeLabel ?: "Tiền phòng", fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Text(formatVnd(order.roomFee), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = PosColors.Primary)
+                                Text(order.roomFeeLabel ?: "Tiền phòng", style = typeFor(22), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Text(formatVnd(order.roomFee), style = typeFor(24), fontWeight = FontWeight.Bold, color = PosColors.Primary)
                             }
                         }
                     }
@@ -149,8 +162,8 @@ fun OrderScreen(
             }
             HorizontalDivider(thickness = 3.dp)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("TỔNG", fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                Text(formatVnd(order?.total ?: 0), fontSize = 40.sp, fontWeight = FontWeight.Black)
+                Text("TỔNG", style = typeFor(30), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(formatVnd(order?.total ?: 0), style = typeFor(40), fontWeight = FontWeight.Black)
             }
             if (order != null && order.order.lines.isEmpty() && table.zone.timed) {
                 BigButton("Hủy mở phòng", { confirmCancelRoom = true }, Modifier.fillMaxWidth(), color = PosColors.Chip, textColor = PosColors.Danger, height = 60.dp)
@@ -185,7 +198,7 @@ fun OrderScreen(
     confirmRemove?.let { line ->
         ConfirmDialog(
             message = "Xóa \"${line.name}\" khỏi bàn?",
-            confirmText = "Xóa",
+            confirmText = "Xóa món",
             onDismiss = { confirmRemove = null },
             onConfirm = { engine.removeLine(tableId, line.id); confirmRemove = null },
         )
@@ -240,9 +253,9 @@ private fun TablePickerDialog(
     var chosen by remember { mutableStateOf<vn.muoikip.pos.core.TableView?>(null) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold) },
+        title = { Text(title, style = typeFor(26), fontWeight = FontWeight.Bold) },
         text = {
-            if (targets.isEmpty()) Text(emptyText, fontSize = 24.sp)
+            if (targets.isEmpty()) Text(emptyText, style = typeFor(24))
             else Column(
                 Modifier.height(420.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -265,7 +278,7 @@ private fun TablePickerDialog(
     chosen?.let { t ->
         ConfirmDialog(
             message = "Xác nhận: ${title.removeSuffix(":")} ${t.label}?",
-            confirmText = "Đồng ý",
+            confirmText = "Xác nhận",
             confirmColor = PosColors.Pay,
             onDismiss = { chosen = null },
             onConfirm = { onPick(t.table.id) },
@@ -281,19 +294,19 @@ private fun LineRow(
     onPrice: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(line.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(line.name, style = typeFor(24), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Text(
                 line.amount?.let { formatVnd(it) } ?: "Chưa nhập giá",
-                fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                style = typeFor(24), fontWeight = FontWeight.Bold,
                 color = if (line.amount == null) PosColors.Danger else PosColors.Ink,
             )
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BigButton("−", onMinus, Modifier.width(64.dp), color = PosColors.Chip, textColor = PosColors.Ink, height = 56.dp, fontSize = 30)
-            Text("${line.quantity}", fontSize = 28.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp), textAlign = TextAlign.Center)
+            Text("${line.quantity}", style = typeFor(28), fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp), textAlign = TextAlign.Center)
             BigButton("+", onPlus, Modifier.width(64.dp), color = PosColors.Chip, textColor = PosColors.Ink, height = 56.dp, fontSize = 30)
             BigButton(
                 line.unitPrice?.let { formatVnd(it) } ?: "Nhập giá",

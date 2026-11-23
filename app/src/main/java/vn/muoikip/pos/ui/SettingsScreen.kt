@@ -63,9 +63,9 @@ fun SettingsScreen(engine: PosEngine, refresh: Int, actions: SettingsActions, on
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
             Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
         ) {
-            BigButton("← Sơ đồ bàn", onBack, color = PosColors.Selected)
+            BigButton("← Sơ đồ bàn", onBack, color = PosColors.Primary)
             SettingsTab.entries.forEach { t ->
                 val sel = t == tab
                 BigButton(
@@ -95,7 +95,7 @@ private fun MenuEditor(engine: PosEngine) {
     var addingCategory by remember { mutableStateOf(false) }
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(Modifier.width(300.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.width(300.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             categories.forEach { c ->
                 val sel = c.id == categoryId
                 BigButton(
@@ -110,14 +110,14 @@ private fun MenuEditor(engine: PosEngine) {
             BigButton("+ Thêm món", { adding = true }, color = PosColors.Pay)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(engine.menuForEditing(categoryId), key = { it.id }) { item ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
-                            item.name, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
+                            item.name, style = typeFor(24), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
                             color = if (item.active) PosColors.Ink else PosColors.Muted,
                         )
                         Text(
                             if (!item.active) "Đang ẩn" else item.price?.let { formatVnd(it) } ?: "Giá nhập khi bán",
-                            fontSize = 22.sp, color = if (item.active) PosColors.Ink else PosColors.Danger,
+                            style = typeFor(22), color = if (item.active) PosColors.Ink else PosColors.Danger,
                         )
                         BigButton("Sửa", { editing = item }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp)
                         BigButton(
@@ -171,12 +171,12 @@ private fun MenuItemDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold) },
+        title = { Text(title, style = typeFor(28), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 OutlinedTextField(
                     value = name, onValueChange = { name = it.take(40) }, label = { Text("Tên món") },
-                    singleLine = true, textStyle = TextStyle(fontSize = 26.sp), modifier = Modifier.fillMaxWidth(),
+                    singleLine = true, textStyle = typeFor(26), modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     BigButton(
@@ -186,7 +186,7 @@ private fun MenuItemDialog(
                     BigButton("Nhập khi bán", { price = null }, color = if (price == null) PosColors.Selected else PosColors.Chip,
                         textColor = if (price == null) Color.White else PosColors.Ink)
                 }
-                Text("Nhóm:", fontSize = 22.sp)
+                Text("Nhóm:", style = typeFor(22))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     engine.categories().forEach { c ->
                         val sel = c.id == categoryId
@@ -209,11 +209,11 @@ fun TextInputDialog(title: String, initial: String = "", onDismiss: () -> Unit, 
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold) },
+        title = { Text(title, style = typeFor(28), fontWeight = FontWeight.Bold) },
         text = {
             OutlinedTextField(
                 value = text, onValueChange = { text = it.take(40) }, singleLine = true,
-                textStyle = TextStyle(fontSize = 26.sp), modifier = Modifier.fillMaxWidth(),
+                textStyle = typeFor(26), modifier = Modifier.fillMaxWidth(),
             )
         },
         confirmButton = { BigButton("Lưu", { onConfirm(text) }, color = PosColors.Pay, enabled = text.isNotBlank()) },
@@ -232,7 +232,7 @@ private fun BankPanel(engine: PosEngine) {
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Chọn ngân hàng", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("Chọn ngân hàng", style = typeFor(24), fontWeight = FontWeight.Bold)
             vn.muoikip.pos.core.BANKS.chunked(3).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     row.forEach { b ->
@@ -250,23 +250,23 @@ private fun BankPanel(engine: PosEngine) {
         Column(Modifier.weight(1f).fillMaxHeight().background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(
                 "Mã QR có sẵn số tiền sẽ in trên hóa đơn và phiếu tạm tính. Khách quét bằng app ngân hàng.",
-                fontSize = 20.sp, color = PosColors.Muted,
+                style = typeFor(20), color = PosColors.Muted,
             )
             OutlinedTextField(
                 // Wallet accounts (MoMo, ZaloPay) can contain letters, so allow A–Z as well as digits.
                 value = account, onValueChange = { v -> account = v.uppercase().filter { it.isLetterOrDigit() && it.code < 128 }.take(19) },
-                label = { Text("Số tài khoản") }, singleLine = true, textStyle = TextStyle(fontSize = 28.sp),
+                label = { Text("Số tài khoản") }, singleLine = true, textStyle = typeFor(28),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii),
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = holder, onValueChange = { holder = vn.muoikip.pos.core.VietQr.ascii(it).uppercase().take(40) },
-                label = { Text("Tên chủ tài khoản (không dấu)") }, singleLine = true, textStyle = TextStyle(fontSize = 28.sp),
+                label = { Text("Tên chủ tài khoản (không dấu)") }, singleLine = true, textStyle = typeFor(28),
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
                 bin?.let { "Ngân hàng: ${vn.muoikip.pos.core.bankName(it)}" } ?: "Chưa chọn ngân hàng",
-                fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                style = typeFor(24), fontWeight = FontWeight.Bold,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BigButton(
@@ -281,7 +281,7 @@ private fun BankPanel(engine: PosEngine) {
         }
     }
     if (confirmClear) {
-        ConfirmDialog("Bỏ mã QR khỏi hóa đơn?", "Bỏ", onDismiss = { confirmClear = false }, onConfirm = {
+        ConfirmDialog("Bỏ mã QR khỏi hóa đơn?", "Bỏ mã QR", onDismiss = { confirmClear = false }, onConfirm = {
             engine.setBankAccount(null); bin = null; account = ""; holder = ""; confirmClear = false
         })
     }
@@ -297,7 +297,7 @@ private fun BackupPanel(actions: SettingsActions) {
     Column(Modifier.fillMaxSize().background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             "Máy tự sao lưu mỗi ngày khi mở app (giữ 30 bản gần nhất). Thư mục: Android/data/vn.muoikip.pos/files/backups",
-            fontSize = 20.sp, color = PosColors.Muted,
+            style = typeFor(20), color = PosColors.Muted,
         )
         BigButton("Sao lưu ngay", {
             message = runCatching { "Đã sao lưu: ${actions.backupNow().name}" }.getOrElse { "Sao lưu lỗi: ${it.message}" }
@@ -305,8 +305,8 @@ private fun BackupPanel(actions: SettingsActions) {
         }, color = PosColors.Pay)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(files, key = { it.name }) { f ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(backupLabel(f), fontSize = 22.sp, modifier = Modifier.weight(1f))
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(backupLabel(f), style = typeFor(22), modifier = Modifier.weight(1f))
                     BigButton("Khôi phục", { confirmRestore = f }, color = PosColors.Chip, textColor = PosColors.Danger, height = 60.dp)
                 }
                 HorizontalDivider()

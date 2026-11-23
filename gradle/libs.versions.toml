@@ -11,6 +11,8 @@ composeBom = "2026.02.01"
 room = "2.8.5"
 sunmiPrinter = "1.0.24"
 robolectric = "4.18.1"
+# Not in the Compose BOM any more; 1.7.8 is the last release (minSdk 21).
+materialIconsCore = "1.7.8"
 androidxTestCore = "1.7.0"
 
 [libraries]
@@ -28,6 +30,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 sunmi-printer = { group = "com.sunmi", name = "printerlibrary", version.ref = "sunmiPrinter" }
+androidx-compose-material-icons = { group = "androidx.compose.material", name = "material-icons-core", version.ref = "materialIconsCore" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-test-core = { group = "androidx.test", name = "core-ktx", version.ref = "androidxTestCore" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }

@@ -49,35 +49,35 @@ fun ReportPanel(engine: PosEngine) {
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BigButton("‹ Hôm trước", { dayAt -= 24 * 3600_000L }, color = PosColors.Chip, textColor = PosColors.Ink, height = 60.dp)
-                Text("Ngày ${dayFmt.format(Date(from))}", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Text("Ngày ${dayFmt.format(Date(from))}", style = typeFor(26), fontWeight = FontWeight.Bold)
                 BigButton("Hôm sau ›", { dayAt += 24 * 3600_000L }, color = PosColors.Chip, textColor = PosColors.Ink, height = 60.dp,
                     enabled = until <= System.currentTimeMillis() + 24 * 3600_000L - 1)
             }
-            Text("Tính từ 6:00 sáng đến 6:00 sáng hôm sau", fontSize = 18.sp, color = PosColors.Muted)
-            Text("Doanh thu: ${formatVnd(report.revenue)}", fontSize = 40.sp, fontWeight = FontWeight.Black, color = PosColors.Pay)
-            Text("Số hóa đơn: ${report.billCount}   ·   Tiền phòng: ${formatVnd(report.roomFees)}", fontSize = 24.sp)
+            Text("Tính từ 6:00 sáng đến 6:00 sáng hôm sau", style = typeFor(18), color = PosColors.Muted)
+            Text("Doanh thu: ${formatVnd(report.revenue)}", style = typeFor(40), fontWeight = FontWeight.Black, color = PosColors.Pay)
+            Text("Số hóa đơn: ${report.billCount}   ·   Tiền phòng: ${formatVnd(report.roomFees)}", style = typeFor(24))
             HorizontalDivider()
-            Text("Món bán được", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("Món bán được", style = typeFor(24), fontWeight = FontWeight.Bold)
             LazyColumn(Modifier.background(Color.White).padding(8.dp)) {
                 items(report.items, key = { it.name }) { l ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                        Text(l.name, fontSize = 22.sp, modifier = Modifier.weight(1f))
-                        Text("x${l.quantity}", fontSize = 22.sp, modifier = Modifier.padding(horizontal = 16.dp))
-                        Text(formatVnd(l.amount), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                        Text(l.name, style = typeFor(22), modifier = Modifier.weight(1f))
+                        Text("x${l.quantity}", style = typeFor(22), modifier = Modifier.padding(horizontal = 16.dp))
+                        Text(formatVnd(l.amount), style = typeFor(22), fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
-        Column(Modifier.weight(1f).fillMaxHeight().background(Color.White).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Hóa đơn trong ngày", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Column(Modifier.weight(1f).fillMaxHeight().background(Color.White).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Hóa đơn trong ngày", style = typeFor(24), fontWeight = FontWeight.Bold)
             LazyColumn {
                 items(bills, key = { it.id }) { b ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(timeFmt.format(Date(b.closedAt ?: 0)), fontSize = 22.sp, modifier = Modifier.padding(end = 12.dp))
-                        Text(b.placeLabel ?: "—", fontSize = 22.sp, modifier = Modifier.weight(1f))
-                        Text(formatVnd(b.total ?: 0), fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(timeFmt.format(Date(b.closedAt ?: 0)), style = typeFor(22), modifier = Modifier.padding(end = 12.dp))
+                        Text(b.placeLabel ?: "—", style = typeFor(22), modifier = Modifier.weight(1f))
+                        Text(formatVnd(b.total ?: 0), style = typeFor(22), fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 12.dp))
                         BigButton("In lại", { engine.reprintPaid(b.id)?.let { message = it } }, color = PosColors.Chip,
                             textColor = PosColors.Primary, height = 56.dp, fontSize = 20)
                     }
@@ -99,11 +99,11 @@ fun ZonesPanel(engine: PosEngine) {
     var rateFor by remember { mutableStateOf<TableView?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    LazyColumn(Modifier.fillMaxSize().background(Color.White).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(Modifier.fillMaxSize().background(Color.White).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(engine.zones(), key = { it.id }) { z ->
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(z.name + if (z.timed) " (tính giờ)" else "", fontSize = 28.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                    Text(z.name + if (z.timed) " (tính giờ)" else "", style = typeFor(28), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
                     BigButton("Đổi tên", { renaming = z }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp)
                     BigButton("Xóa khu", {
                         if (engine.canDeleteZone(z.id)) deletingZone = z else message = "Khu ${z.name} còn bàn đang có khách (hoặc là khu cuối cùng)."
@@ -113,7 +113,7 @@ fun ZonesPanel(engine: PosEngine) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { t ->
                             Column(Modifier.weight(1f).background(PosColors.Chip).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(if (z.timed) "${z.name} ${t.table.number}" else "Bàn ${t.table.number}", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                                Text(if (z.timed) "${z.name} ${t.table.number}" else "Bàn ${t.table.number}", style = typeFor(22), fontWeight = FontWeight.Bold)
                                 if (z.timed) {
                                     BigButton("${formatVnd(t.table.hourlyRate ?: 0)}/giờ", { rateFor = t }, color = PosColors.Background,
                                         textColor = PosColors.Primary, height = 52.dp, fontSize = 18)
@@ -139,7 +139,7 @@ fun ZonesPanel(engine: PosEngine) {
             onConfirm = { engine.deleteZone(z.id); deletingZone = null })
     }
     deletingTable?.let { t ->
-        ConfirmDialog("Xóa ${t.label}?", "Xóa", onDismiss = { deletingTable = null },
+        ConfirmDialog("Xóa ${t.label}?", "Xóa bàn", onDismiss = { deletingTable = null },
             onConfirm = { engine.deleteTable(t.table.id); deletingTable = null })
     }
     rateFor?.let { t ->
@@ -160,9 +160,9 @@ fun PinPanel(engine: PosEngine) {
         Text(
             if (engine.hasPin()) "Đang bật mã PIN: phải nhập mã mới vào được Cài đặt."
             else "Chưa có mã PIN: ai cũng vào được Cài đặt (sửa menu, giá phòng, ngân hàng).",
-            fontSize = 26.sp,
+            style = typeFor(26),
         )
-        Text("Màn bán hàng (gọi món, thanh toán) không bao giờ cần mã PIN.", fontSize = 20.sp, color = PosColors.Muted)
+        Text("Màn bán hàng (gọi món, thanh toán) không bao giờ cần mã PIN.", style = typeFor(20), color = PosColors.Muted)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             BigButton(if (engine.hasPin()) "Đổi mã PIN" else "Đặt mã PIN", { entering = true }, color = PosColors.Pay)
             if (engine.hasPin()) BigButton("Tắt mã PIN", { confirmClear = true }, color = PosColors.Chip, textColor = PosColors.Danger)
@@ -175,7 +175,7 @@ fun PinPanel(engine: PosEngine) {
         }
     }
     if (confirmClear) {
-        ConfirmDialog("Tắt mã PIN?", "Tắt", onDismiss = { confirmClear = false }, onConfirm = { engine.setPin(null); confirmClear = false })
+        ConfirmDialog("Tắt mã PIN?", "Tắt mã PIN", onDismiss = { confirmClear = false }, onConfirm = { engine.setPin(null); confirmClear = false })
     }
     message?.let { MessageDialog(it, onDismiss = { message = null }) }
 }
@@ -186,11 +186,11 @@ fun PinDialog(title: String, error: String? = null, onDismiss: () -> Unit, onSub
     var pin by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, fontSize = 28.sp, fontWeight = FontWeight.Bold) },
+        title = { Text(title, style = typeFor(28), fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("●".repeat(pin.length).ifEmpty { " " }, fontSize = 44.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                if (error != null) Text(error, color = PosColors.Danger, fontSize = 22.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("●".repeat(pin.length).ifEmpty { " " }, style = typeFor(44), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                if (error != null) Text(error, color = PosColors.Danger, style = typeFor(22))
                 listOf("123", "456", "789", "C0⌫").forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { k ->
