@@ -1,0 +1,81 @@
+package vn.muoikip.pos.core
+
+/** Money is always an integer number of đồng. */
+typealias Vnd = Long
+
+data class ShopInfo(val name: String, val address: String, val phone: String)
+
+/** A zone (Khu). [timed] zones bill each table (room) by the hour. */
+data class Zone(val id: String, val name: String, val timed: Boolean, val sort: Int)
+
+/** A table or, in a timed zone, a room. [hourlyRate] is set only for rooms in timed zones. */
+data class Table(val id: String, val zoneId: String, val number: Int, val hourlyRate: Vnd?)
+
+data class Category(val id: String, val name: String, val sort: Int)
+
+/** [price] null means "giá nhập khi bán": the price must be entered before payment. */
+data class MenuItem(
+    val id: String,
+    val categoryId: String,
+    val name: String,
+    val price: Vnd?,
+    val sort: Int,
+    val active: Boolean = true,
+)
+
+enum class OrderStatus { OPEN, PAID, CANCELLED }
+
+/** Name and price are copied from the menu when ordered so later menu edits never change an order. */
+data class OrderLine(
+    val id: String,
+    val menuItemId: String,
+    val name: String,
+    val quantity: Int,
+    val unitPrice: Vnd?,
+    val seq: Int,
+) {
+    val amount: Vnd? get() = unitPrice?.let { it * quantity }
+}
+
+data class Order(
+    val id: String,
+    val tableId: String,
+    val openedAt: Long,
+    val status: OrderStatus = OrderStatus.OPEN,
+    val lines: List<OrderLine> = emptyList(),
+    /** Room fee typed in by the cashier; null = computed from time. */
+    val roomFeeOverride: Vnd? = null,
+    val closedAt: Long? = null,
+    /** Room fee actually charged, fixed at payment. */
+    val roomFeeCharged: Vnd? = null,
+    val total: Vnd? = null,
+    val cashGiven: Vnd? = null,
+)
+
+/** Everything the engine needs at start-up. Only OPEN orders are loaded. */
+data class Snapshot(
+    val zones: List<Zone>,
+    val tables: List<Table>,
+    val categories: List<Category>,
+    val menuItems: List<MenuItem>,
+    val openOrders: List<Order>,
+)
+
+interface PosStore {
+    fun load(): Snapshot
+    fun saveZone(zone: Zone)
+    fun saveTable(table: Table)
+    fun saveCategory(category: Category)
+    fun saveMenuItem(item: MenuItem)
+    /** Upsert the order and replace its lines. */
+    fun saveOrder(order: Order)
+}
+
+fun interface Clock {
+    fun now(): Long
+}
+
+interface ReceiptPrinter {
+    /** Returns null on success, or a Vietnamese error message. */
+    fun print(receipt: Receipt): String?
+}
