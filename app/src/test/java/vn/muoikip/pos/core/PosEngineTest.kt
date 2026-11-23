@@ -8,38 +8,6 @@ import org.junit.Before
 import org.junit.Test
 import java.util.TimeZone
 
-class InMemoryStore : PosStore {
-    val zones = LinkedHashMap<String, Zone>()
-    val tables = LinkedHashMap<String, Table>()
-    val categories = LinkedHashMap<String, Category>()
-    val items = LinkedHashMap<String, MenuItem>()
-    val orders = LinkedHashMap<String, Order>()
-    override fun load() = Snapshot(
-        zones.values.toList(), tables.values.toList(), categories.values.toList(), items.values.toList(),
-        orders.values.filter { it.status == OrderStatus.OPEN },
-    )
-    override fun saveZone(zone: Zone) { zones[zone.id] = zone }
-    override fun saveTable(table: Table) { tables[table.id] = table }
-    override fun saveCategory(category: Category) { categories[category.id] = category }
-    override fun saveMenuItem(item: MenuItem) { items[item.id] = item }
-    override fun saveOrder(order: Order) { orders[order.id] = order }
-}
-
-class FakeClock(var ms: Long = 1_700_000_000_000L) : Clock {
-    override fun now() = ms
-    fun advanceMinutes(m: Int, s: Int = 0) { ms += m * 60_000L + s * 1000L }
-}
-
-class FakePrinter : ReceiptPrinter {
-    val printed = mutableListOf<Receipt>()
-    var failWith: String? = null
-    override fun print(receipt: Receipt): String? {
-        failWith?.let { return it }
-        printed += receipt
-        return null
-    }
-}
-
 class PosEngineTest {
     private lateinit var store: InMemoryStore
     private lateinit var clock: FakeClock
@@ -233,6 +201,19 @@ class PosEngineTest {
         val saved = store.orders.values.single { it.status == OrderStatus.PAID }
         assertEquals(550_000L, saved.total)
         assertEquals(600_000L, saved.cashGiven)
+    }
+
+    @Test fun checkoutWithoutCashPrintsBillWithoutChangeLines() {
+        val t = table("Sân trước", 6)
+        engine.addItem(t, item("Hến xào"))
+        engine.addItem(t, item("Bia Tiger"))
+        val r = engine.checkout(t) as CheckoutResult.Paid
+        assertEquals(70_000L, r.receipt.total)
+        assertNull(r.receipt.cashGiven)
+        assertFalse(engine.table(t).occupied)
+        val rows = ReceiptLayout.rows(printer.printed.single())
+        assertFalse(rows.any { it is PrintRow.Amount && (it.label == "Khách đưa" || it.label == "Tiền thối") })
+        assertTrue(PrintRow.Amount("TỔNG CỘNG", "70.000đ", emphasized = true) in rows)
     }
 
     @Test fun insufficientCashIsRejected() {

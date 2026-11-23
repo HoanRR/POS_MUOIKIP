@@ -23,6 +23,10 @@ data class Receipt(
     val total: Vnd,
     val cashGiven: Vnd?,
     val change: Vnd?,
+    /** VietQR transfer code for [total]; null when no bank account is set. */
+    val qrPayload: String? = null,
+    /** "Vietcombank · 0011001234567 · NGO VAN A". */
+    val bankLine: String? = null,
 )
 
 fun formatVnd(amount: Vnd): String {
@@ -40,6 +44,7 @@ sealed interface PrintRow {
     data class Item(val name: String, val quantity: String, val amount: String) : PrintRow
     data class Amount(val label: String, val value: String, val emphasized: Boolean = false) : PrintRow
     data object Divider : PrintRow
+    data class Qr(val payload: String) : PrintRow
 }
 
 object ReceiptLayout {
@@ -69,6 +74,12 @@ object ReceiptLayout {
             if (r.cashGiven != null) add(PrintRow.Amount("Khách đưa", formatVnd(r.cashGiven)))
             if (r.change != null) add(PrintRow.Amount("Tiền thối", formatVnd(r.change)))
             add(PrintRow.Divider)
+            if (r.qrPayload != null) {
+                add(PrintRow.Center("Quét mã để chuyển khoản"))
+                add(PrintRow.Qr(r.qrPayload))
+                r.bankLine?.let { add(PrintRow.Center(it)) }
+                add(PrintRow.Divider)
+            }
             add(
                 PrintRow.Center(
                     if (r.kind == ReceiptKind.PRE_BILL) "Phiếu tạm tính – chưa thanh toán" else "Cảm ơn quý khách!"

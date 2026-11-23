@@ -21,7 +21,7 @@ import vn.muoikip.pos.core.PosEngine
 private const val MAP = "map"
 
 @Composable
-fun PosApp(engine: PosEngine) {
+fun PosApp(engine: PosEngine, settings: SettingsActions) {
     val revision by engine.revision.collectAsState()
     // Ticks every 20 s so room timers and fees refresh on screen.
     var tick by remember { mutableIntStateOf(0) }
@@ -42,7 +42,12 @@ fun PosApp(engine: PosEngine) {
                 selectedZoneId = selectedZoneId,
                 onSelectZone = { selectedZoneId = it },
                 onOpenTable = { tableId = it; screen = "order" },
+                onSettings = { screen = "settings" },
             )
+            "settings" -> {
+                BackHandler { screen = MAP }
+                SettingsScreen(engine, refresh, settings, onBack = { screen = MAP })
+            }
             "order" -> {
                 BackHandler { screen = MAP }
                 OrderScreen(
@@ -51,6 +56,7 @@ fun PosApp(engine: PosEngine) {
                     refresh = refresh,
                     onBack = { screen = MAP },
                     onPay = { screen = "pay" },
+                    onSwitchTable = { tableId = it },
                 )
             }
             "pay" -> {

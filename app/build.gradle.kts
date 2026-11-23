@@ -2,6 +2,12 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
+}
+
+room {
+    // Exported schemas are committed: they are the baseline for migration tests.
+    schemaDirectory("$projectDir/schemas")
 }
 
 android {
@@ -33,6 +39,9 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -49,5 +58,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.sunmi.printer)
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

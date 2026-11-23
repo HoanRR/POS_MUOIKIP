@@ -50,6 +50,8 @@ data class Order(
     val roomFeeCharged: Vnd? = null,
     val total: Vnd? = null,
     val cashGiven: Vnd? = null,
+    /** Table name at payment time, so renaming or deleting a table never changes old bills. */
+    val placeLabel: String? = null,
 )
 
 /** Everything the engine needs at start-up. Only OPEN orders are loaded. */
@@ -69,6 +71,14 @@ interface PosStore {
     fun saveMenuItem(item: MenuItem)
     /** Upsert the order and replace its lines. */
     fun saveOrder(order: Order)
+    /** PAID orders with closedAt in [from, until), oldest first, lines included. */
+    fun paidOrders(from: Long, until: Long): List<Order>
+    /** Deletes the zone and all its tables. */
+    fun deleteZone(zoneId: String)
+    fun deleteTable(tableId: String)
+    fun loadSettings(): Map<String, String>
+    /** null deletes the key. */
+    fun saveSetting(key: String, value: String?)
 }
 
 fun interface Clock {

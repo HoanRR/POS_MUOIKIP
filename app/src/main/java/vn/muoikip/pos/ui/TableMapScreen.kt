@@ -43,6 +43,7 @@ fun TableMapScreen(
     selectedZoneId: String?,
     onSelectZone: (String) -> Unit,
     onOpenTable: (String) -> Unit,
+    onSettings: () -> Unit,
 ) {
     @Suppress("UNUSED_EXPRESSION") refresh
     val zones = engine.zones()
@@ -73,6 +74,7 @@ fun TableMapScreen(
                 )
             }
             BigButton("+ Thêm khu", { addingZone = true }, color = PosColors.Background, textColor = PosColors.Primary, fontSize = 22)
+            BigButton("⚙ Cài đặt", onSettings, color = PosColors.Background, textColor = PosColors.Muted, fontSize = 22)
         }
 
         LazyVerticalGrid(

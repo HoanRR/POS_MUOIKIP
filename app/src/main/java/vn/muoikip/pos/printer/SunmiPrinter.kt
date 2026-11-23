@@ -55,6 +55,11 @@ class SunmiPrinter(private val context: Context) : ReceiptPrinter {
                         p.setFontSize(if (row.emphasized) 30f else 24f, null)
                         p.printColumnsString(arrayOf(row.label, row.value), intArrayOf(1, 1), intArrayOf(0, 2), null)
                     }
+                    is PrintRow.Qr -> {
+                        p.setAlignment(1, null)
+                        p.printQRCode(row.payload, 8, 1, null) // module size 8, error level M
+                        p.lineWrap(1, null)
+                    }
                     PrintRow.Divider -> {
                         p.setAlignment(0, null); p.printTextWithFont("-".repeat(48) + "\n", "", 24f, null)
                     }

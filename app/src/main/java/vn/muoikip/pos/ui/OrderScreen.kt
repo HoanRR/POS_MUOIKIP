@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
@@ -47,6 +48,7 @@ fun OrderScreen(
     refresh: Int,
     onBack: () -> Unit,
     onPay: () -> Unit,
+    onSwitchTable: (String) -> Unit,
 ) {
     @Suppress("UNUSED_EXPRESSION") refresh
     val table = engine.table(tableId)
@@ -59,6 +61,7 @@ fun OrderScreen(
     var editRoomFee by remember { mutableStateOf(false) }
     var confirmCancelRoom by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
+    var picking by remember { mutableStateOf<String?>(null) } // "move" or "merge"
 
     Row(Modifier.fillMaxSize()) {
         // ---------- Menu (left) ----------
@@ -108,7 +111,12 @@ fun OrderScreen(
             Modifier.weight(0.44f).fillMaxHeight().background(Color.White).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            table.elapsedMs?.let { Text("Đã ngồi: ${elapsedText(it)}", fontSize = 22.sp, color = PosColors.Muted) }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                BigButton("Chuyển bàn", { picking = "move" }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp, fontSize = 20, enabled = order != null)
+                BigButton("Gộp bàn", { picking = "merge" }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp, fontSize = 20,
+                    enabled = order != null && !table.zone.timed)
+                table.elapsedMs?.let { Text("Đã ngồi: ${elapsedText(it)}", fontSize = 22.sp, color = PosColors.Muted) }
+            }
             if (order == null || (order.order.lines.isEmpty() && order.roomFee == null)) {
                 Text("Chưa có món. Chạm vào món bên trái để thêm.", fontSize = 24.sp, color = PosColors.Muted, modifier = Modifier.weight(1f))
             } else {
@@ -200,10 +208,68 @@ fun OrderScreen(
             onConfirm = { engine.cancelEmpty(tableId); confirmCancelRoom = false; onBack() },
         )
     }
+    picking?.let { mode ->
+        val move = mode == "move"
+        TablePickerDialog(
+            title = if (move) "Chuyển ${table.label} sang bàn trống:" else "Gộp món của ${table.label} vào bàn:",
+            targets = if (move) engine.moveTargets(tableId) else engine.mergeTargets(tableId),
+            emptyText = if (move) "Không còn bàn trống cùng loại." else "Không có bàn nào khác đang có khách.",
+            onDismiss = { picking = null },
+            onPick = { target ->
+                if (move) engine.moveTable(tableId, target) else engine.mergeInto(tableId, target)
+                picking = null
+                onSwitchTable(target)
+            },
+        )
+    }
     message?.let { m ->
         MessageDialog(m, onDismiss = { message = null }, actionText = "In lại", onAction = {
             message = engine.printPreBill(tableId)
         })
+    }
+}
+
+@Composable
+private fun TablePickerDialog(
+    title: String,
+    targets: List<vn.muoikip.pos.core.TableView>,
+    emptyText: String,
+    onDismiss: () -> Unit,
+    onPick: (String) -> Unit,
+) {
+    var chosen by remember { mutableStateOf<vn.muoikip.pos.core.TableView?>(null) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold) },
+        text = {
+            if (targets.isEmpty()) Text(emptyText, fontSize = 24.sp)
+            else Column(
+                Modifier.height(420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                targets.chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { t ->
+                            BigButton(
+                                t.label.replace(" · ", "\n"), { chosen = t }, Modifier.weight(1f), height = 84.dp, fontSize = 18,
+                                color = if (t.occupied) PosColors.TableBusy else PosColors.Chip, textColor = PosColors.Ink,
+                            )
+                        }
+                        repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+            }
+        },
+        confirmButton = { BigButton("Đóng", onDismiss, color = PosColors.Chip, textColor = PosColors.Ink) },
+    )
+    chosen?.let { t ->
+        ConfirmDialog(
+            message = "Xác nhận: ${title.removeSuffix(":")} ${t.label}?",
+            confirmText = "Đồng ý",
+            confirmColor = PosColors.Pay,
+            onDismiss = { chosen = null },
+            onConfirm = { onPick(t.table.id) },
+        )
     }
 }
 

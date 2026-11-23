@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import vn.muoikip.pos.ui.PosApp
 import vn.muoikip.pos.ui.PosTheme
+import vn.muoikip.pos.ui.SettingsActions
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -12,7 +13,16 @@ class MainActivity : ComponentActivity() {
         val app = application as PosApplication
         app.printer // bind the printer service early so it is ready at the first print
         setContent {
-            PosTheme { PosApp(app.engine) }
+            PosTheme {
+                PosApp(
+                    app.engine,
+                    SettingsActions(
+                        listBackups = { app.backup.list() },
+                        backupNow = { app.backupNow() },
+                        restore = { app.restoreAndRestart(it) },
+                    ),
+                )
+            }
         }
     }
 }

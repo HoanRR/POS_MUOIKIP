@@ -50,6 +50,8 @@ class PosEngine(
     private val menuItems = LinkedHashMap<String, MenuItem>()
     /** Open order per table id. */
     private val openOrders = HashMap<String, Order>()
+    private var bank: BankAccount? = null
+    private var pinHash: String? = null
 
     private val _revision = MutableStateFlow(0)
     /** Increments after every change so the UI knows to re-read. */
@@ -66,6 +68,9 @@ class PosEngine(
         snap.categories.forEach { categories[it.id] = it }
         snap.menuItems.forEach { menuItems[it.id] = it }
         snap.openOrders.filter { it.status == OrderStatus.OPEN }.forEach { openOrders[it.tableId] = it }
+        val settings = store.loadSettings()
+        bank = loadBank(settings)
+        pinHash = settings[KEY_PIN]
     }
 
     // ---------- Queries ----------
@@ -116,6 +121,71 @@ class PosEngine(
         store.saveTable(table)
         changed()
         return table
+    }
+
+    // ---------- Bank account (VietQR) ----------
+
+    fun bankAccount(): BankAccount? = bank
+
+    /** null removes the QR from receipts. */
+    fun setBankAccount(account: BankAccount?) {
+        bank = account
+        store.saveSetting(KEY_BIN, account?.bin)
+        store.saveSetting(KEY_ACCOUNT, account?.account)
+        store.saveSetting(KEY_HOLDER, account?.holder)
+        changed()
+    }
+
+    private fun loadBank(settings: Map<String, String>): BankAccount? {
+        val bin = settings[KEY_BIN] ?: return null
+        val acc = settings[KEY_ACCOUNT] ?: return null
+        return BankAccount(bin, acc, settings[KEY_HOLDER].orEmpty())
+    }
+
+    private companion object {
+        const val KEY_BIN = "bank.bin"
+        const val KEY_ACCOUNT = "bank.account"
+        const val KEY_HOLDER = "bank.holder"
+        const val KEY_PIN = "pin.hash"
+    }
+
+    // ---------- Menu editing ----------
+
+    fun addMenuItem(categoryId: String, name: String, price: Vnd?): MenuItem {
+        val sort = (menuItems.values.filter { it.categoryId == categoryId }.maxOfOrNull { it.sort } ?: 0) + 1
+        val item = MenuItem(newId(), categoryId, name.trim(), price, sort)
+        menuItems[item.id] = item
+        store.saveMenuItem(item)
+        changed()
+        return item
+    }
+
+    /** All items of a category, hidden ones included. */
+    fun menuForEditing(categoryId: String): List<MenuItem> =
+        menuItems.values.filter { it.categoryId == categoryId }.sortedBy { it.sort }
+
+    fun setMenuItemActive(itemId: String, active: Boolean) = saveMenuItem(menuItems.getValue(itemId).copy(active = active))
+
+    /** Open orders keep the name and price copied when they were ordered. Moving category puts the item last. */
+    fun updateMenuItem(itemId: String, name: String, price: Vnd?, categoryId: String) {
+        val old = menuItems.getValue(itemId)
+        val sort = if (old.categoryId == categoryId) old.sort
+        else (menuItems.values.filter { it.categoryId == categoryId }.maxOfOrNull { it.sort } ?: 0) + 1
+        saveMenuItem(old.copy(name = name.trim(), price = price, categoryId = categoryId, sort = sort))
+    }
+
+    fun addCategory(name: String): Category {
+        val c = Category(newId(), name.trim(), (categories.values.maxOfOrNull { it.sort } ?: 0) + 1)
+        categories[c.id] = c
+        store.saveCategory(c)
+        changed()
+        return c
+    }
+
+    private fun saveMenuItem(item: MenuItem) {
+        menuItems[item.id] = item
+        store.saveMenuItem(item)
+        changed()
     }
 
     // ---------- Ordering ----------
@@ -175,6 +245,50 @@ class PosEngine(
         changed()
     }
 
+    // ---------- Move & merge ----------
+
+    private fun allTablesInOrder(): List<Table> =
+        tables.values.sortedWith(compareBy({ zoneOf(it).sort }, { it.number }))
+
+    /** Empty tables of the same kind (normal ↔ normal, room ↔ room). */
+    fun moveTargets(fromTableId: String): List<TableView> {
+        val timed = zoneOf(tableOf(fromTableId)).timed
+        return allTablesInOrder()
+            .filter { it.id != fromTableId && it.id !in openOrders && zoneOf(it).timed == timed }
+            .map { view(it) }
+    }
+
+    /** A room keeps its clock (opening time); the new room's rate applies. */
+    fun moveTable(fromTableId: String, toTableId: String) {
+        require(moveTargets(fromTableId).any { it.table.id == toTableId }) { "Không chuyển được sang bàn này" }
+        val order = openOrders.remove(fromTableId) ?: return
+        save(order.copy(tableId = toTableId))
+    }
+
+    /** Other occupied tables. A room cannot be merged away, or its room fee would be lost. */
+    fun mergeTargets(fromTableId: String): List<TableView> {
+        if (zoneOf(tableOf(fromTableId)).timed) return emptyList()
+        return allTablesInOrder().filter { it.id != fromTableId && it.id in openOrders }.map { view(it) }
+    }
+
+    /** Moves every line of [fromTableId] into [intoTableId]; same item at same price adds up. */
+    fun mergeInto(fromTableId: String, intoTableId: String) {
+        require(mergeTargets(fromTableId).any { it.table.id == intoTableId }) { "Không gộp được vào bàn này" }
+        val from = openOrders.getValue(fromTableId)
+        var lines = openOrders.getValue(intoTableId).lines
+        for (l in from.lines.sortedBy { it.seq }) {
+            val same = lines.firstOrNull { it.menuItemId == l.menuItemId && it.unitPrice == l.unitPrice }
+            lines = if (same != null) {
+                lines.map { if (it.id == same.id) it.copy(quantity = it.quantity + l.quantity) else it }
+            } else {
+                lines + l.copy(id = newId(), seq = (lines.maxOfOrNull { it.seq } ?: 0) + 1)
+            }
+        }
+        openOrders.remove(fromTableId)
+        store.saveOrder(from.copy(status = OrderStatus.CANCELLED, closedAt = clock.now(), lines = emptyList()))
+        save(openOrders.getValue(intoTableId).copy(lines = lines))
+    }
+
     // ---------- Printing & payment ----------
 
     /** Prints a pre-bill; the table stays open. Returns a printer error or null. */
@@ -183,7 +297,8 @@ class PosEngine(
         return printer.print(receipt(order, ReceiptKind.PRE_BILL, cashGiven = null, at = clock.now()))
     }
 
-    fun checkout(tableId: String, cashGiven: Vnd): CheckoutResult {
+    /** [cashGiven] null = no cash/change step: the bill is just printed and the table closed. */
+    fun checkout(tableId: String, cashGiven: Vnd? = null): CheckoutResult {
         val order = openOrders[tableId] ?: return CheckoutResult.NothingToPay
         val missing = order.lines.filter { it.unitPrice == null }.map { it.id }
         if (missing.isNotEmpty()) return CheckoutResult.MissingPrices(missing)
@@ -191,13 +306,13 @@ class PosEngine(
         if (order.lines.isEmpty() && !isTimed) return CheckoutResult.NothingToPay
         val now = clock.now()
         val total = total(order, now)
-        if (cashGiven < total) return CheckoutResult.InsufficientCash(total)
+        if (cashGiven != null && cashGiven < total) return CheckoutResult.InsufficientCash(total)
 
         val receipt = receipt(order, ReceiptKind.BILL, cashGiven, now)
         // Close first: a printer failure must never reopen a paid table.
         val paid = order.copy(
             status = OrderStatus.PAID, closedAt = now, roomFeeCharged = roomFee(order, now),
-            total = total, cashGiven = cashGiven,
+            total = total, cashGiven = cashGiven, placeLabel = label(tableOf(tableId)),
         )
         openOrders.remove(tableId)
         store.saveOrder(paid)
@@ -206,6 +321,105 @@ class PosEngine(
     }
 
     fun reprint(receipt: Receipt): String? = printer.print(receipt)
+
+    // ---------- Reports & old bills ----------
+
+    /** Bills paid before labels were stored (schema v1–v2) get the table's current name, if it still exists. */
+    fun paidBills(from: Long, until: Long): List<Order> = store.paidOrders(from, until).map { o ->
+        if (o.placeLabel != null) o else o.copy(placeLabel = tables[o.tableId]?.let { label(it) })
+    }
+
+    fun report(from: Long, until: Long): DailyReport {
+        val bills = store.paidOrders(from, until)
+        val items = bills.flatMap { it.lines }
+            .groupBy { it.name }
+            .map { (name, ls) -> ReportLine(name, ls.sumOf { it.quantity }, ls.sumOf { it.amount ?: 0 }) }
+            .sortedByDescending { it.amount }
+        return DailyReport(
+            billCount = bills.size,
+            revenue = bills.sumOf { it.total ?: 0 },
+            roomFees = bills.sumOf { it.roomFeeCharged ?: 0 },
+            items = items,
+        )
+    }
+
+    /** Rebuilds a paid bill exactly as charged (room fee is the stored one, not re-timed). */
+    fun reprintPaid(orderId: String): String? {
+        val o = paidBills(0, Long.MAX_VALUE).first { it.id == orderId }
+        val fee = o.roomFeeCharged
+        val place = o.placeLabel ?: ""
+        val receipt = Receipt(
+            shop = shop,
+            kind = ReceiptKind.BILL,
+            placeLabel = place,
+            openedAt = o.openedAt,
+            printedAt = clock.now(),
+            items = o.lines.sortedBy { it.seq }.map { ReceiptItem(it.name, it.quantity, it.unitPrice ?: 0, it.amount ?: 0) },
+            roomFeeLabel = fee?.let {
+                "Tiền phòng ${place.removePrefix("Phòng ")} – ${RoomFee.billedDurationText((o.closedAt ?: o.openedAt) - o.openedAt)}"
+            },
+            roomFee = fee,
+            total = o.total ?: 0,
+            cashGiven = o.cashGiven,
+            change = o.cashGiven?.let { it - (o.total ?: 0) },
+            qrPayload = bank?.let { VietQr.payload(it.bin, it.account, o.total ?: 0, "${shop.name} $place") },
+            bankLine = bank?.let { "${bankName(it.bin)} · ${it.account} · ${it.holder}" },
+        )
+        return printer.print(receipt)
+    }
+
+    // ---------- PIN ----------
+
+    fun hasPin(): Boolean = pinHash != null
+
+    /** Always true when no PIN is set. */
+    fun checkPin(pin: String): Boolean = pinHash == null || pinHash == hash(pin)
+
+    fun setPin(pin: String?) {
+        pinHash = pin?.let { hash(it) }
+        store.saveSetting(KEY_PIN, pinHash)
+    }
+
+    private fun hash(pin: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest("muoikip:$pin".toByteArray())
+            .joinToString("") { "%02x".format(it) }
+
+    // ---------- Zone & table admin ----------
+
+    fun renameZone(zoneId: String, name: String) {
+        val z = zones.getValue(zoneId).copy(name = name.trim())
+        zones[z.id] = z
+        store.saveZone(z)
+        changed()
+    }
+
+    fun setRoomRate(tableId: String, rate: Vnd) {
+        val t = tableOf(tableId).copy(hourlyRate = rate)
+        tables[t.id] = t
+        store.saveTable(t)
+        changed()
+    }
+
+    fun canDeleteTable(tableId: String): Boolean = tableId !in openOrders
+
+    fun canDeleteZone(zoneId: String): Boolean =
+        tables.values.none { it.zoneId == zoneId && it.id in openOrders } && zones.size > 1
+
+    fun deleteTable(tableId: String) {
+        require(canDeleteTable(tableId)) { "Bàn đang có khách" }
+        tables.remove(tableId)
+        store.deleteTable(tableId)
+        changed()
+    }
+
+    fun deleteZone(zoneId: String) {
+        require(canDeleteZone(zoneId)) { "Khu còn bàn đang có khách" }
+        zones.remove(zoneId)
+        tables.values.removeAll { it.zoneId == zoneId }
+        store.deleteZone(zoneId)
+        changed()
+    }
 
     // ---------- Internals ----------
 
@@ -262,6 +476,8 @@ class PosEngine(
             total = total,
             cashGiven = cashGiven,
             change = cashGiven?.let { it - total },
+            qrPayload = bank?.let { VietQr.payload(it.bin, it.account, total, "${shop.name} ${label(tableOf(order.tableId))}") },
+            bankLine = bank?.let { "${bankName(it.bin)} · ${it.account} · ${it.holder}" },
         )
     }
 

@@ -183,3 +183,19 @@ Một app Android chạy trên chính máy T1-G, hoạt động hoàn toàn khô
 - Dịch vụ máy in `woyou.aidlservice.jiuiv5` cần được xác nhận có trên máy (`pm list packages woyou`). File AIDL phải khớp model máy theo tài liệu Sunmi.
 - Thứ tự sau MVP: VietQR → sửa menu → chuyển bàn → gộp bàn → app nhân viên → tách bill → báo cáo và sao lưu.
 - Menu là "Menu Mùa Đông" và sẽ đổi theo mùa, nên màn sửa menu là ưu tiên cao ngay sau VietQR.
+
+## Đợt 2 (2026-11-23) — đã làm
+
+Các mục dưới đây trước nằm ở Out of Scope, nay đã có (TDD, hai seam: `PosEngine` và hợp đồng `PosStore` chạy trên cả kho trong bộ nhớ lẫn Room/SQLite qua Robolectric):
+
+- **DB**: schema Room được xuất vào `app/schemas` và commit; mỗi phiên bản có migration và test migration dựng từ schema cũ (v1 → v2: bảng `setting`; v2 → v3: cột `orders.placeLabel`). Không bao giờ dùng migration phá dữ liệu. Journal mode TRUNCATE để file DB sao chép được.
+- **Sao lưu**: tự động mỗi ngày khi mở app (giữ 30 bản) vào `Android/data/vn.muoikip.pos/files/backups`; sao lưu tay và khôi phục trong Cài đặt. Bản sao lưu gộp cả file `-wal` (lỗi tìm thấy trên T1 với bản cài đầu tiên chạy WAL).
+- **Sửa menu**: thêm món, sửa tên/giá/nhóm, ẩn/hiện, thêm nhóm. Đơn đang mở giữ tên và giá cũ.
+- **VietQR**: mã QR có sẵn số tiền in trên hóa đơn và phiếu tạm tính khi đã nhập tài khoản ngân hàng (chủ quán tự nhập).
+- **Chuyển bàn**: chỉ sang bàn trống cùng loại; phòng VIP giữ giờ vào, áp giá phòng mới.
+- **Gộp bàn**: gộp món vào bàn đang có khách; không gộp *từ* phòng VIP (tránh mất tiền phòng).
+- **Báo cáo ngày**: ngày kinh doanh 6:00 → 6:00; doanh thu, số hóa đơn, tiền phòng, món bán chạy; danh sách hóa đơn và in lại đúng như đã tính.
+- **Mã PIN**: chặn màn Cài đặt (không chặn bán hàng); lưu dạng băm SHA-256.
+- **Khu & bàn**: đổi tên khu, xóa khu/bàn đang trống, sửa giá phòng.
+
+Còn lại: app gọi món cho nhân viên (máy chủ LAN), đồng bộ cloud, tách bill.
