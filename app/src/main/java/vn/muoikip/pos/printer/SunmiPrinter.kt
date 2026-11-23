@@ -29,9 +29,23 @@ class SunmiPrinter(private val context: Context) : ReceiptPrinter {
     override fun print(receipt: Receipt): String? {
         val p = service ?: return "Chưa kết nối được máy in. Thử lại sau vài giây."
         stateError(runCatching { p.updatePrinterState() }.getOrDefault(1))?.let { return it }
+        val rows = ReceiptLayout.rows(receipt)
+        // Preferred: large bold receipt drawn as an image. Falls back to the printer's own font.
+        runCatching {
+            p.printerInit(null)
+            p.setAlignment(1, null)
+            ReceiptRenderer.segments(rows).forEach { seg ->
+                when (seg) {
+                    is android.graphics.Bitmap -> { p.printBitmap(seg, null); seg.recycle() }
+                    is PrintRow.Qr -> { p.lineWrap(1, null); p.printQRCode(seg.payload, 9, 1, null); p.lineWrap(1, null) }
+                }
+            }
+            p.lineWrap(4, null)
+            p.cutPaper(null)
+        }.onSuccess { return null }
         return runCatching {
             p.printerInit(null)
-            ReceiptLayout.rows(receipt).forEach { row ->
+            rows.forEach { row ->
                 when (row) {
                     is PrintRow.Title -> {
                         p.setAlignment(1, null); p.printTextWithFont(row.text + "\n", "", 36f, null)
