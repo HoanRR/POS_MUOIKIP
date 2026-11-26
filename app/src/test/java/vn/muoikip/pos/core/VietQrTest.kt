@@ -36,7 +36,7 @@ class VietQrTest {
     @Test fun billCarriesQrOnlyWhenBankAccountIsSet() {
         val engine = PosEngine(InMemoryStore(), FakeClock(), FakePrinter(), DefaultData.SHOP)
         val t = engine.tables(engine.zones().first().id).first().table.id
-        val tiger = engine.categories().flatMap { engine.menu(it.id) }.first { it.name == "Bia Tiger" }.id
+        val tiger = engine.categories().flatMap { engine.menu(it.id) }.first { it.name == "Bia Tiger lớn" }.id
         engine.addItem(t, tiger)
         val noBank = (engine.checkout(t, 20_000) as CheckoutResult.Paid).receipt
         assertNull(noBank.qrPayload)

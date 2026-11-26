@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.muoikip.pos.core.OrderLine
 import vn.muoikip.pos.core.PosEngine
+import vn.muoikip.pos.core.formatKg
 import vn.muoikip.pos.core.formatVnd
 
 @Composable
@@ -56,11 +58,17 @@ fun OrderScreen(
     val order = engine.order(tableId)
     val categories = engine.categories()
     var categoryId by rememberSaveable { mutableStateOf(categories.first().id) }
+    val menuItems = engine.menu(categoryId)
 
     var priceLine by remember { mutableStateOf<OrderLine?>(null) }
+    var quantityLine by remember { mutableStateOf<OrderLine?>(null) }
+    var weightLine by remember { mutableStateOf<OrderLine?>(null) }
     var confirmRemove by remember { mutableStateOf<OrderLine?>(null) }
     var editRoomFee by remember { mutableStateOf(false) }
     var confirmCancelRoom by remember { mutableStateOf(false) }
+    var editStart by remember { mutableStateOf(false) }
+    var editRate by remember { mutableStateOf(false) }
+    var roomDialog by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf<String?>(null) } // "move" or "merge"
 
@@ -87,11 +95,20 @@ fun OrderScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(engine.menu(categoryId), key = { it.id }) { item ->
+                items(menuItems, key = { it.id }) { item ->
                     // Immediate feedback: the tile shows how many of this item the table already has.
-                    val onTable = order?.order?.lines?.filter { it.menuItemId == item.id }?.sumOf { it.quantity } ?: 0
+                    val linesOfItem = order?.order?.lines?.filter { it.menuItemId == item.id }.orEmpty()
+                    val onTable = linesOfItem.sumOf { it.quantity }
+                    // Weighed items show just the kilos so the price beside it never wraps.
+                    val onTableText = if (item.soldByWeight) linesOfItem.sumOf { it.weightKg ?: 0.0 }.let { "${formatKg(it)}kg" }
+                        else "Đã gọi $onTable"
                     Surface(
-                        onClick = { engine.addItem(tableId, item.id) },
+                        onClick = {
+                            engine.addItem(tableId, item.id)
+                            if (item.soldByWeight) {
+                                weightLine = engine.order(tableId)?.order?.lines?.firstOrNull { it.menuItemId == item.id }
+                            }
+                        },
                         shape = MaterialTheme.shapes.medium,
                         color = if (onTable > 0) PosColors.PrimarySoft else PosColors.Surface,
                         border = androidx.compose.foundation.BorderStroke(
@@ -104,13 +121,14 @@ fun OrderScreen(
                             Text(item.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, maxLines = 2)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    item.price?.let { formatVnd(it) } ?: "Giá nhập khi bán",
+                                    item.price?.let { formatVnd(it) + if (item.soldByWeight) "/kg" else "" } ?: "Giá nhập khi bán",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = if (item.price == null) PosColors.Danger else PosColors.Muted,
+                                    maxLines = 1,
                                     modifier = Modifier.weight(1f),
                                 )
                                 if (onTable > 0) {
-                                    Text("Đã gọi $onTable", style = MaterialTheme.typography.labelMedium, color = PosColors.Primary)
+                                    Text(onTableText, maxLines = 1, style = MaterialTheme.typography.labelMedium, color = PosColors.Primary)
                                 }
                             }
                         }
@@ -124,11 +142,15 @@ fun OrderScreen(
             Modifier.weight(0.44f).fillMaxHeight().background(Color.White).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 BigButton("Chuyển bàn", { picking = "move" }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp, fontSize = 20, enabled = order != null)
-                BigButton("Gộp bàn", { picking = "merge" }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp, fontSize = 20,
-                    enabled = order != null && !table.zone.timed)
-                table.elapsedMs?.let { Text("Đã ngồi: ${elapsedText(it)}", style = typeFor(22), color = PosColors.Muted) }
+                if (order != null && table.zone.timed) {
+                    // Rooms can never be merged away, so the timer takes the "Gộp bàn" slot.
+                    RoomTimerButton(order.order.openedAt, onClick = { roomDialog = true }, modifier = Modifier.weight(1f))
+                } else {
+                    BigButton("Gộp bàn", { picking = "merge" }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp, fontSize = 20,
+                        enabled = order != null && !table.zone.timed)
+                }
             }
             if (order == null || (order.order.lines.isEmpty() && order.roomFee == null)) {
                 Text("Chưa có món. Chạm vào món bên trái để thêm.", style = typeFor(24), color = PosColors.Muted, modifier = Modifier.weight(1f))
@@ -144,6 +166,7 @@ fun OrderScreen(
                             onPlus = { engine.setQuantity(tableId, line.id, line.quantity + 1) },
                             onPrice = { priceLine = line },
                             onRemove = { confirmRemove = line },
+                            onQuantity = { if (line.weightKg != null) weightLine = line else quantityLine = line },
                         )
                         HorizontalDivider()
                     }
@@ -221,12 +244,68 @@ fun OrderScreen(
             onConfirm = { engine.cancelEmpty(tableId); confirmCancelRoom = false; onBack() },
         )
     }
+    quantityLine?.let { line ->
+        NumberPadDialog(
+            title = "Số lượng: ${line.name}",
+            initial = line.quantity.toLong(),
+            onDismiss = { quantityLine = null },
+            onConfirm = { n ->
+                quantityLine = null
+                if (n <= 0L) confirmRemove = line else engine.setQuantity(tableId, line.id, n.coerceAtMost(999).toInt())
+            },
+            showMoney = false,
+        )
+    }
+    weightLine?.let { line ->
+        DecimalPadDialog(
+            title = "Số ký: ${line.name}",
+            initial = line.weightKg ?: 1.0,
+            unit = "kg",
+            pricePerUnit = line.unitPrice,
+            onDismiss = { weightLine = null },
+            onConfirm = { kg -> engine.setLineWeight(tableId, line.id, kg); weightLine = null },
+        )
+    }
+    // Room settings window; the editors below open on top of it and return to it.
+    if (roomDialog && order?.roomFee != null) {
+        RoomDialog(
+            title = table.label,
+            openedAt = order.order.openedAt,
+            hourlyRate = table.table.hourlyRate ?: 0,
+            roomFee = order.roomFee,
+            feeIsManual = order.order.roomFeeOverride != null,
+            onEditStart = { editStart = true },
+            onEditRate = { editRate = true },
+            onEditFee = { editRoomFee = true },
+            onDismiss = { roomDialog = false },
+        )
+    }
+    if (editStart && order != null) {
+        StartTimeDialog(
+            initial = order.order.openedAt,
+            onDismiss = { editStart = false },
+            onConfirm = { t ->
+                if (engine.setRoomStart(tableId, t)) editStart = false
+                else message = "Giờ vào không được sau thời điểm hiện tại."
+            },
+        )
+    }
+    if (editRate) {
+        NumberPadDialog(
+            title = "Giá ${table.label} mỗi giờ",
+            initial = table.table.hourlyRate ?: 0,
+            onDismiss = { editRate = false },
+            onConfirm = { engine.setRoomRate(tableId, it); editRate = false },
+        )
+    }
     picking?.let { mode ->
         val move = mode == "move"
         TablePickerDialog(
             title = if (move) "Chuyển ${table.label} sang bàn trống:" else "Gộp món của ${table.label} vào bàn:",
             targets = if (move) engine.moveTargets(tableId) else engine.mergeTargets(tableId),
-            emptyText = if (move) "Không còn bàn trống cùng loại." else "Không có bàn nào khác đang có khách.",
+            emptyText = if (move) "Không còn bàn trống." else "Không có bàn nào khác đang có khách.",
+            noteFor = { t -> if (move && t.zone.timed && !table.zone.timed) "Tiền phòng tính từ lúc chuyển." else null },
+            questionFor = { t -> if (move) "Chuyển ${table.label} sang ${t.label}?" else "Gộp món của ${table.label} vào ${t.label}?" },
             onDismiss = { picking = null },
             onPick = { target ->
                 if (move) engine.moveTable(tableId, target) else engine.mergeInto(tableId, target)
@@ -249,26 +328,37 @@ private fun TablePickerDialog(
     emptyText: String,
     onDismiss: () -> Unit,
     onPick: (String) -> Unit,
+    noteFor: (vn.muoikip.pos.core.TableView) -> String? = { null },
+    questionFor: (vn.muoikip.pos.core.TableView) -> String,
 ) {
     var chosen by remember { mutableStateOf<vn.muoikip.pos.core.TableView?>(null) }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
+        // Wide enough that every zone fits without scrolling on the 14" screen.
+        modifier = Modifier.width(1080.dp),
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
         title = { Text(title, style = typeFor(26), fontWeight = FontWeight.Bold) },
         text = {
             if (targets.isEmpty()) Text(emptyText, style = typeFor(24))
             else Column(
-                Modifier.height(420.dp).verticalScroll(rememberScrollState()),
+                Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                targets.chunked(4).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        row.forEach { t ->
-                            BigButton(
-                                t.label.replace(" · ", "\n"), { chosen = t }, Modifier.weight(1f), height = 84.dp, fontSize = 18,
-                                color = if (t.occupied) PosColors.TableBusy else PosColors.Chip, textColor = PosColors.Ink,
-                            )
+                // One section per zone, headed by its name; buttons only say "Bàn 3" / "VIP 1".
+                targets.groupBy { it.zone }.entries.sortedBy { it.key.sort }.forEach { (zone, inZone) ->
+                    Text(zone.name, style = typeFor(22), fontWeight = FontWeight.Bold, color = PosColors.Muted)
+                    inZone.chunked(8).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { t ->
+                                BigButton(
+                                    if (zone.timed) "${zone.name} ${t.table.number}" else "Bàn ${t.table.number}",
+                                    { chosen = t }, Modifier.weight(1f), height = 64.dp, fontSize = 20,
+                                    color = if (zone.timed) PosColors.TableBusy else PosColors.Chip,
+                                    textColor = if (zone.timed) PosColors.TableBusyInk else PosColors.Ink,
+                                )
+                            }
+                            repeat(8 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
-                        repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
@@ -277,7 +367,7 @@ private fun TablePickerDialog(
     )
     chosen?.let { t ->
         ConfirmDialog(
-            message = "Xác nhận: ${title.removeSuffix(":")} ${t.label}?",
+            message = questionFor(t) + (noteFor(t)?.let { "\n$it" } ?: ""),
             confirmText = "Xác nhận",
             confirmColor = PosColors.Pay,
             onDismiss = { chosen = null },
@@ -293,6 +383,7 @@ private fun LineRow(
     onPlus: () -> Unit,
     onPrice: () -> Unit,
     onRemove: () -> Unit,
+    onQuantity: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -305,11 +396,20 @@ private fun LineRow(
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BigButton("−", onMinus, Modifier.width(64.dp), color = PosColors.Chip, textColor = PosColors.Ink, height = 56.dp, fontSize = 30)
-            Text("${line.quantity}", style = typeFor(28), fontWeight = FontWeight.Black, modifier = Modifier.width(48.dp), textAlign = TextAlign.Center)
-            BigButton("+", onPlus, Modifier.width(64.dp), color = PosColors.Chip, textColor = PosColors.Ink, height = 56.dp, fontSize = 30)
+            val w = line.weightKg
+            if (w != null) {
+                // Sold by the kilo: one button shows the weight; tapping it opens the decimal pad.
+                BigButton("${formatKg(w)} kg", onQuantity, Modifier.width(192.dp), color = PosColors.PrimarySoft,
+                    textColor = PosColors.Selected, height = 56.dp, fontSize = 24)
+            } else {
+                BigButton("−", onMinus, Modifier.width(64.dp), color = PosColors.Chip, textColor = PosColors.Ink, height = 56.dp, fontSize = 30)
+                // Tap the number to type a quantity (e.g. 12 bia) instead of pressing + many times.
+                BigButton("${line.quantity}", onQuantity, Modifier.width(64.dp), color = PosColors.PrimarySoft,
+                    textColor = PosColors.Selected, height = 56.dp, fontSize = 28)
+                BigButton("+", onPlus, Modifier.width(64.dp), color = PosColors.Chip, textColor = PosColors.Ink, height = 56.dp, fontSize = 30)
+            }
             BigButton(
-                line.unitPrice?.let { formatVnd(it) } ?: "Nhập giá",
+                line.unitPrice?.let { formatVnd(it) + if (w != null) "/kg" else "" } ?: "Nhập giá",
                 onPrice,
                 Modifier.weight(1f),
                 color = if (line.unitPrice == null) PosColors.Danger else PosColors.Chip,

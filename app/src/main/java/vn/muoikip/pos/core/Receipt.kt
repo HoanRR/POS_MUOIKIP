@@ -7,7 +7,11 @@ import java.util.TimeZone
 
 enum class ReceiptKind { PRE_BILL, BILL }
 
-data class ReceiptItem(val name: String, val quantity: Int, val unitPrice: Vnd, val amount: Vnd)
+data class ReceiptItem(val name: String, val quantity: Int, val unitPrice: Vnd, val amount: Vnd, val weightKg: Double? = null)
+
+/** "1,25" — Vietnamese decimal comma, at most 3 decimals, no trailing zeros. */
+fun formatKg(kg: Double): String =
+    java.math.BigDecimal(kg).setScale(3, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString().replace('.', ',')
 
 data class Receipt(
     val shop: ShopInfo,
@@ -63,8 +67,14 @@ object ReceiptLayout {
             add(PrintRow.Divider)
             add(PrintRow.Item("Món", "SL", "Thành tiền"))
             r.items.forEach {
-                add(PrintRow.Item(it.name, it.quantity.toString(), formatVnd(it.amount)))
-                if (it.quantity > 1) add(PrintRow.Text("   ${formatVnd(it.unitPrice)} x ${it.quantity}"))
+                val w = it.weightKg
+                if (w != null) {
+                    add(PrintRow.Item(it.name, formatKg(w) + "kg", formatVnd(it.amount)))
+                    add(PrintRow.Text("   ${formatVnd(it.unitPrice)}/kg x ${formatKg(w)}kg"))
+                } else {
+                    add(PrintRow.Item(it.name, it.quantity.toString(), formatVnd(it.amount)))
+                    if (it.quantity > 1) add(PrintRow.Text("   ${formatVnd(it.unitPrice)} x ${it.quantity}"))
+                }
             }
             if (r.roomFeeLabel != null && r.roomFee != null) {
                 add(PrintRow.Item(r.roomFeeLabel, "", formatVnd(r.roomFee)))

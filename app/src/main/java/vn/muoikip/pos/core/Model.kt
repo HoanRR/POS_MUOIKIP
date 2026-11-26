@@ -21,6 +21,8 @@ data class MenuItem(
     val price: Vnd?,
     val sort: Int,
     val active: Boolean = true,
+    /** Priced per kilo (e.g. Ba ba): the line carries a decimal weight instead of a count. */
+    val soldByWeight: Boolean = false,
 )
 
 enum class OrderStatus { OPEN, PAID, CANCELLED }
@@ -33,8 +35,11 @@ data class OrderLine(
     val quantity: Int,
     val unitPrice: Vnd?,
     val seq: Int,
+    /** Kilos for items sold by weight; null for counted items. */
+    val weightKg: Double? = null,
 ) {
-    val amount: Vnd? get() = unitPrice?.let { it * quantity }
+    /** Weighed lines round to the nearest whole đồng. */
+    val amount: Vnd? get() = unitPrice?.let { p -> weightKg?.let { Math.round(p * it) } ?: (p * quantity) }
 }
 
 data class Order(

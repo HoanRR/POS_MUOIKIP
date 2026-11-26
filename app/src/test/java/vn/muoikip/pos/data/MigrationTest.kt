@@ -79,4 +79,24 @@ class MigrationTest {
         assertEquals(null, paid.placeLabel)
         db.close()
     }
+
+    @Test fun v3ToV4MarksBaBaSoldByWeightAndKeepsLines() {
+        createAtVersion(3).apply {
+            execSQL("INSERT INTO menu_item (id, categoryId, name, price, sort, active) VALUES ('m1', 'c1', 'Ba ba (1kg)', 700000, 1, 1)")
+            execSQL("INSERT INTO menu_item (id, categoryId, name, price, sort, active) VALUES ('m2', 'c1', 'Bia Tiger', 20000, 2, 1)")
+            execSQL("INSERT INTO orders (id, tableId, openedAt, status) VALUES ('o1', 't1', 1000, 'OPEN')")
+            execSQL("INSERT INTO order_line (id, orderId, menuItemId, name, quantity, unitPrice, seq) VALUES ('l1', 'o1', 'm2', 'Bia Tiger', 3, 20000, 1)")
+            close()
+        }
+        val db = AppDatabase.open(context, dbName)
+        val snap = RoomPosStore(db.dao()).load()
+        val byName = snap.menuItems.associateBy { it.id }
+        assertEquals("Ba ba", byName.getValue("m1").name)
+        assertEquals(true, byName.getValue("m1").soldByWeight)
+        assertEquals(false, byName.getValue("m2").soldByWeight)
+        val line = snap.openOrders.single().lines.single()
+        assertEquals(3, line.quantity)
+        assertEquals(null, line.weightKg)
+        db.close()
+    }
 }

@@ -1,6 +1,7 @@
 package vn.muoikip.pos.data
 
 import android.content.Context
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -36,6 +37,8 @@ data class CategoryEntity(@PrimaryKey val id: String, val name: String, val sort
 data class MenuItemEntity(
     @PrimaryKey val id: String, val categoryId: String, val name: String,
     val price: Long?, val sort: Int, val active: Boolean,
+    /** Added in schema v4. */
+    @ColumnInfo(defaultValue = "0") val soldByWeight: Boolean = false,
 )
 
 @Entity(tableName = "orders", indices = [Index("status")])
@@ -51,6 +54,8 @@ data class OrderEntity(
 data class OrderLineEntity(
     @PrimaryKey val id: String, val orderId: String, val menuItemId: String, val name: String,
     val quantity: Int, val unitPrice: Long?, val seq: Int,
+    /** Added in schema v4. */
+    val weightKg: Double? = null,
 )
 
 /** Key/value app settings (bank account, …). Added in schema v2. */
@@ -100,7 +105,7 @@ interface PosDao {
 @Database(
     entities = [ZoneEntity::class, TableEntity::class, CategoryEntity::class, MenuItemEntity::class,
         OrderEntity::class, OrderLineEntity::class, SettingEntity::class],
-    version = 3,
+    version = 4,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun dao(): PosDao
@@ -121,7 +126,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `menu_item` ADD COLUMN `soldByWeight` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `order_line` ADD COLUMN `weightKg` REAL")
+                // Ba ba was seeded as a fixed "1kg" portion; it is now priced per kilo.
+                db.execSQL("UPDATE `menu_item` SET `name` = 'Ba ba', `soldByWeight` = 1 WHERE `name` = 'Ba ba (1kg)'")
+            }
+        }
+
+        val MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 
         /** The data set is tiny (tens of rows), so synchronous main-thread access is acceptable here. */
         fun open(context: Context, name: String = NAME): AppDatabase =
@@ -139,13 +153,13 @@ class RoomPosStore(private val dao: PosDao) : PosStore {
         zones = dao.zones().map { Zone(it.id, it.name, it.timed, it.sort) },
         tables = dao.tables().map { Table(it.id, it.zoneId, it.number, it.hourlyRate) },
         categories = dao.categories().map { Category(it.id, it.name, it.sort) },
-        menuItems = dao.menuItems().map { MenuItem(it.id, it.categoryId, it.name, it.price, it.sort, it.active) },
+        menuItems = dao.menuItems().map { MenuItem(it.id, it.categoryId, it.name, it.price, it.sort, it.active, it.soldByWeight) },
         openOrders = dao.openOrders().map(::toOrder),
     )
 
     private fun toOrder(o: OrderEntity) = Order(
         id = o.id, tableId = o.tableId, openedAt = o.openedAt, status = OrderStatus.valueOf(o.status),
-        lines = dao.lines(o.id).sortedBy { it.seq }.map { OrderLine(it.id, it.menuItemId, it.name, it.quantity, it.unitPrice, it.seq) },
+        lines = dao.lines(o.id).sortedBy { it.seq }.map { OrderLine(it.id, it.menuItemId, it.name, it.quantity, it.unitPrice, it.seq, it.weightKg) },
         roomFeeOverride = o.roomFeeOverride, closedAt = o.closedAt, roomFeeCharged = o.roomFeeCharged,
         total = o.total, cashGiven = o.cashGiven, placeLabel = o.placeLabel,
     )
@@ -158,7 +172,7 @@ class RoomPosStore(private val dao: PosDao) : PosStore {
     override fun saveTable(table: Table) = dao.upsert(TableEntity(table.id, table.zoneId, table.number, table.hourlyRate))
     override fun saveCategory(category: Category) = dao.upsert(CategoryEntity(category.id, category.name, category.sort))
     override fun saveMenuItem(item: MenuItem) =
-        dao.upsert(MenuItemEntity(item.id, item.categoryId, item.name, item.price, item.sort, item.active))
+        dao.upsert(MenuItemEntity(item.id, item.categoryId, item.name, item.price, item.sort, item.active, item.soldByWeight))
 
     override fun loadSettings(): Map<String, String> = dao.settings().associate { it.key to it.value }
 
@@ -171,6 +185,6 @@ class RoomPosStore(private val dao: PosDao) : PosStore {
             order.id, order.tableId, order.openedAt, order.status.name, order.roomFeeOverride,
             order.closedAt, order.roomFeeCharged, order.total, order.cashGiven, order.placeLabel,
         ),
-        order.lines.map { OrderLineEntity(it.id, order.id, it.menuItemId, it.name, it.quantity, it.unitPrice, it.seq) },
+        order.lines.map { OrderLineEntity(it.id, order.id, it.menuItemId, it.name, it.quantity, it.unitPrice, it.seq, it.weightKg) },
     )
 }

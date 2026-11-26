@@ -39,13 +39,13 @@ class ReportsAndAdminTest {
     // ---------- Daily report ----------
 
     @Test fun reportSumsPaidBillsOfTheDayOnly() {
-        sell(table("Sân trước", 1), "Bia Tiger", "Bia Tiger", "Rau xào")       // 70.000
+        sell(table("Sân trước", 1), "Bia Tiger lớn", "Bia Tiger lớn", "Rau xào")       // 70.000
         clock.ms = at(2026, 11, 24, 1, 0)                                       // after midnight, same business day
-        sell(table("Sân trước", 2), "Bia Tiger")                               // 20.000
+        sell(table("Sân trước", 2), "Bia Tiger lớn")                               // 20.000
         val vip = table("VIP", 1)
         engine.openRoom(vip)
         clock.ms += 90 * 60_000L
-        sell(vip, "Bia Heineken")                                               // 25.000 + 150.000 room
+        sell(vip, "Heineken lớn")                                               // 25.000 + 150.000 room
         engine.addItem(table("Sân trước", 3), item("Hến xào"))                 // still open: not in report
         clock.ms = at(2026, 11, 24, 7, 0)
         sell(table("Sân trước", 4), "Rau xào")                                 // next business day
@@ -55,7 +55,7 @@ class ReportsAndAdminTest {
         assertEquals(265_000L, r.revenue)
         assertEquals(150_000L, r.roomFees)
         assertEquals(
-            listOf(ReportLine("Bia Tiger", 3, 60_000), ReportLine("Rau xào", 1, 30_000), ReportLine("Bia Heineken", 1, 25_000)),
+            listOf(ReportLine("Bia Tiger lớn", 3, 60_000), ReportLine("Rau xào", 1, 30_000), ReportLine("Heineken lớn", 1, 25_000)),
             r.items,
         )
     }

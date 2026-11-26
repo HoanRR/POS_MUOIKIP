@@ -1,6 +1,8 @@
 package vn.muoikip.pos.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MenuEditingTest {
@@ -12,32 +14,31 @@ class MenuEditingTest {
 
     @Test fun addedItemAppearsAtEndOfItsCategory() {
         val drinks = category("Đồ uống")
+        val before = engine.menu(drinks.id).size
         engine.addMenuItem(drinks.id, "Nước ngọt", 15_000)
-        assertEquals(
-            listOf("Bia Heineken" to 25_000L, "Bia Tiger" to 20_000L, "Nước ngọt" to 15_000L),
-            engine.menu(drinks.id).map { it.name to it.price },
-        )
+        assertEquals(before + 1, engine.menu(drinks.id).size)
+        assertEquals("Nước ngọt" to 15_000L, engine.menu(drinks.id).last().let { it.name to it.price })
     }
 
     @Test fun hiddenItemLeavesOrderMenuButStaysInEditor() {
         val drinks = category("Đồ uống")
-        val tiger = engine.menu(drinks.id).first { it.name == "Bia Tiger" }
+        val tiger = engine.menu(drinks.id).first { it.name == "Bia Tiger lớn" }
         engine.setMenuItemActive(tiger.id, false)
-        assertEquals(listOf("Bia Heineken"), engine.menu(drinks.id).map { it.name })
-        assertEquals(listOf("Bia Heineken" to true, "Bia Tiger" to false), engine.menuForEditing(drinks.id).map { it.name to it.active })
+        assertFalse("Bia Tiger lớn" in engine.menu(drinks.id).map { it.name })
+        assertEquals(false, engine.menuForEditing(drinks.id).first { it.name == "Bia Tiger lớn" }.active)
         engine.setMenuItemActive(tiger.id, true)
-        assertEquals(listOf("Bia Heineken", "Bia Tiger"), engine.menu(drinks.id).map { it.name })
+        assertTrue("Bia Tiger lớn" in engine.menu(drinks.id).map { it.name })
     }
 
     @Test fun editingItemAffectsNewOrdersOnly() {
         val drinks = category("Đồ uống")
-        val tiger = engine.menu(drinks.id).first { it.name == "Bia Tiger" }
+        val tiger = engine.menu(drinks.id).first { it.name == "Bia Tiger lớn" }
         val busy = engine.tables(engine.zones().first().id).first().table.id
         engine.addItem(busy, tiger.id)
 
         engine.updateMenuItem(tiger.id, name = "Bia Tiger bạc", price = 22_000, categoryId = drinks.id)
 
-        assertEquals("Bia Tiger" to 20_000L, engine.order(busy)!!.order.lines.single().let { it.name to it.unitPrice })
+        assertEquals("Bia Tiger lớn" to 20_000L, engine.order(busy)!!.order.lines.single().let { it.name to it.unitPrice })
         val fresh = engine.tables(engine.zones().first().id)[1].table.id
         engine.addItem(fresh, tiger.id)
         assertEquals("Bia Tiger bạc" to 22_000L, engine.order(fresh)!!.order.lines.single().let { it.name to it.unitPrice })
@@ -45,11 +46,11 @@ class MenuEditingTest {
 
     @Test fun movingItemToAnotherCategoryPutsItLast() {
         val drinks = category("Đồ uống")
-        val lau = category("Lẩu")
-        val tiger = engine.menu(drinks.id).first { it.name == "Bia Tiger" }
+        val lau = category("Cá")
+        val tiger = engine.menu(drinks.id).first { it.name == "Bia Tiger lớn" }
         engine.updateMenuItem(tiger.id, name = tiger.name, price = tiger.price, categoryId = lau.id)
-        assertEquals(listOf("Bia Heineken"), engine.menu(drinks.id).map { it.name })
-        assertEquals("Bia Tiger", engine.menu(lau.id).last().name)
+        assertFalse("Bia Tiger lớn" in engine.menu(drinks.id).map { it.name })
+        assertEquals("Bia Tiger lớn", engine.menu(lau.id).last().name)
     }
 
     @Test fun addedCategoryComesLast() {

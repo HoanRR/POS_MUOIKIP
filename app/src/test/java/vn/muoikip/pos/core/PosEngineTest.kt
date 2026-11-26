@@ -36,7 +36,7 @@ class PosEngineTest {
         assertEquals(8, engine.tables(zone("Nhà gỗ").id).size)
         assertEquals(3, engine.tables(zone("VIP").id).size)
         assertTrue(zone("VIP").timed)
-        assertEquals(25_000L, engine.categories().flatMap { engine.menu(it.id) }.first { it.name == "Bia Heineken" }.price)
+        assertEquals(25_000L, engine.categories().flatMap { engine.menu(it.id) }.first { it.name == "Heineken lớn" }.price)
     }
 
     @Test fun seedRunsOnlyOnce() {
@@ -46,7 +46,7 @@ class PosEngineTest {
 
     @Test fun openOrdersSurviveRestart() {
         val t = table("Sân trước", 1)
-        engine.addItem(t, item("Bia Tiger"))
+        engine.addItem(t, item("Bia Tiger lớn"))
         val reloaded = newEngine()
         assertEquals(20_000L, reloaded.order(t)!!.total)
         assertTrue(reloaded.table(t).occupied)
@@ -56,8 +56,8 @@ class PosEngineTest {
 
     @Test fun addingSameItemIncreasesQuantity() {
         val t = table("Sân trước", 1)
-        engine.addItem(t, item("Bia Tiger"))
-        engine.addItem(t, item("Bia Tiger"))
+        engine.addItem(t, item("Bia Tiger lớn"))
+        engine.addItem(t, item("Bia Tiger lớn"))
         val lines = engine.order(t)!!.order.lines
         assertEquals(1, lines.size)
         assertEquals(2, lines[0].quantity)
@@ -103,7 +103,7 @@ class PosEngineTest {
     @Test fun itemWithoutPriceCanBeAddedButBlocksCheckout() {
         val t = table("Sân sau", 1)
         engine.addItem(t, item("Gà"))
-        engine.addItem(t, item("Bia Tiger"))
+        engine.addItem(t, item("Bia Tiger lớn"))
         val gaId = line(t, "Gà").id
         assertTrue(engine.table(t).hasMissingPrices)
         assertEquals(listOf(gaId), engine.order(t)!!.missingPriceLineIds)
@@ -136,7 +136,7 @@ class PosEngineTest {
         engine.openRoom(vip2)
         assertTrue(engine.table(vip2).occupied)
         clock.advanceMinutes(130)
-        engine.addItem(vip2, item("Bia Heineken"))
+        engine.addItem(vip2, item("Heineken lớn"))
         val ov = engine.order(vip2)!!
         assertEquals(225_000L, ov.roomFee)
         assertEquals("Tiền phòng VIP 2 – 2 giờ 15 phút", ov.roomFeeLabel)
@@ -146,7 +146,7 @@ class PosEngineTest {
 
     @Test fun addingItemToClosedRoomOpensIt() {
         val vip1 = table("VIP", 1)
-        engine.addItem(vip1, item("Bia Tiger"))
+        engine.addItem(vip1, item("Bia Tiger lớn"))
         assertEquals(120_000L, engine.order(vip1)!!.total)
     }
 
@@ -162,8 +162,8 @@ class PosEngineTest {
 
     @Test fun emptyRoomStaysOpenUntilCancelled() {
         val vip3 = table("VIP", 3)
-        engine.addItem(vip3, item("Bia Tiger"))
-        engine.removeLine(vip3, line(vip3, "Bia Tiger").id)
+        engine.addItem(vip3, item("Bia Tiger lớn"))
+        engine.removeLine(vip3, line(vip3, "Bia Tiger lớn").id)
         assertTrue(engine.table(vip3).occupied)
         engine.cancelEmpty(vip3)
         assertFalse(engine.table(vip3).occupied)
@@ -190,8 +190,8 @@ class PosEngineTest {
     @Test fun checkoutPrintsBillAndFreesTable() {
         val t = table("Sân trước", 4)
         engine.addItem(t, item("Cá chình nướng"))
-        engine.addItem(t, item("Bia Heineken"))
-        engine.addItem(t, item("Bia Heineken"))
+        engine.addItem(t, item("Heineken lớn"))
+        engine.addItem(t, item("Heineken lớn"))
         val r = engine.checkout(t, 600_000) as CheckoutResult.Paid
         assertNull(r.printError)
         assertEquals(550_000L, r.receipt.total)
@@ -206,7 +206,7 @@ class PosEngineTest {
     @Test fun checkoutWithoutCashPrintsBillWithoutChangeLines() {
         val t = table("Sân trước", 6)
         engine.addItem(t, item("Hến xào"))
-        engine.addItem(t, item("Bia Tiger"))
+        engine.addItem(t, item("Bia Tiger lớn"))
         val r = engine.checkout(t) as CheckoutResult.Paid
         assertEquals(70_000L, r.receipt.total)
         assertNull(r.receipt.cashGiven)
@@ -275,8 +275,8 @@ class PosEngineTest {
         val vip1 = table("VIP", 1)
         engine.openRoom(vip1)
         clock.advanceMinutes(90)
-        engine.addItem(vip1, item("Bia Tiger"))
-        engine.addItem(vip1, item("Bia Tiger"))
+        engine.addItem(vip1, item("Bia Tiger lớn"))
+        engine.addItem(vip1, item("Bia Tiger lớn"))
         val r = (engine.checkout(vip1, 200_000) as CheckoutResult.Paid).receipt
         val rows = ReceiptLayout.rows(r, TimeZone.getTimeZone("Asia/Ho_Chi_Minh"))
 
@@ -284,7 +284,7 @@ class PosEngineTest {
         assertTrue(PrintRow.Center("ĐT: 0989824694") in rows)
         assertTrue(PrintRow.Title("HÓA ĐƠN") in rows)
         assertTrue(PrintRow.Text("Phòng VIP 1") in rows)
-        assertTrue(PrintRow.Item("Bia Tiger", "2", "40.000đ") in rows)
+        assertTrue(PrintRow.Item("Bia Tiger lớn", "2", "40.000đ") in rows)
         assertTrue(PrintRow.Item("Tiền phòng VIP 1 – 1 giờ 30 phút", "", "150.000đ") in rows)
         assertTrue(PrintRow.Amount("TỔNG CỘNG", "190.000đ", emphasized = true) in rows)
         assertTrue(PrintRow.Amount("Khách đưa", "200.000đ") in rows)

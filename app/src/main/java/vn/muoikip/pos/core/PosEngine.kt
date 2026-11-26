@@ -63,6 +63,8 @@ class PosEngine(
             DefaultData.seed(store, newId)
             snap = store.load()
         }
+        DefaultData.upgradeMenu(store, newId)
+        snap = store.load()
         snap.zones.forEach { zones[it.id] = it }
         snap.tables.forEach { tables[it.id] = it }
         snap.categories.forEach { categories[it.id] = it }
@@ -151,9 +153,9 @@ class PosEngine(
 
     // ---------- Menu editing ----------
 
-    fun addMenuItem(categoryId: String, name: String, price: Vnd?): MenuItem {
+    fun addMenuItem(categoryId: String, name: String, price: Vnd?, soldByWeight: Boolean = false): MenuItem {
         val sort = (menuItems.values.filter { it.categoryId == categoryId }.maxOfOrNull { it.sort } ?: 0) + 1
-        val item = MenuItem(newId(), categoryId, name.trim(), price, sort)
+        val item = MenuItem(newId(), categoryId, name.trim(), price, sort, soldByWeight = soldByWeight)
         menuItems[item.id] = item
         store.saveMenuItem(item)
         changed()
@@ -167,11 +169,12 @@ class PosEngine(
     fun setMenuItemActive(itemId: String, active: Boolean) = saveMenuItem(menuItems.getValue(itemId).copy(active = active))
 
     /** Open orders keep the name and price copied when they were ordered. Moving category puts the item last. */
-    fun updateMenuItem(itemId: String, name: String, price: Vnd?, categoryId: String) {
+    fun updateMenuItem(itemId: String, name: String, price: Vnd?, categoryId: String, soldByWeight: Boolean? = null) {
         val old = menuItems.getValue(itemId)
         val sort = if (old.categoryId == categoryId) old.sort
         else (menuItems.values.filter { it.categoryId == categoryId }.maxOfOrNull { it.sort } ?: 0) + 1
-        saveMenuItem(old.copy(name = name.trim(), price = price, categoryId = categoryId, sort = sort))
+        saveMenuItem(old.copy(name = name.trim(), price = price, categoryId = categoryId, sort = sort,
+            soldByWeight = soldByWeight ?: old.soldByWeight))
     }
 
     fun addCategory(name: String): Category {
@@ -201,12 +204,15 @@ class PosEngine(
         val item = menuItems.getValue(menuItemId)
         val order = openOrders[tableId] ?: newOrder(tableId)
         val existing = order.lines.firstOrNull { it.menuItemId == menuItemId }
+        // A weighed item already on the table is corrected by typing its weight, not by tapping again.
+        if (existing != null && item.soldByWeight) return
         val lines = if (existing != null) {
             order.lines.map { if (it.id == existing.id) it.copy(quantity = it.quantity + 1) else it }
         } else {
             order.lines + OrderLine(
                 id = newId(), menuItemId = item.id, name = item.name, quantity = 1,
                 unitPrice = item.price, seq = (order.lines.maxOfOrNull { it.seq } ?: 0) + 1,
+                weightKg = if (item.soldByWeight) 1.0 else null,
             )
         }
         save(order.copy(lines = lines))
@@ -223,11 +229,29 @@ class PosEngine(
 
     fun removeLine(tableId: String, lineId: String) = setQuantity(tableId, lineId, 0)
 
+    /** Kilos for a weighed line (e.g. 1.25). */
+    fun setLineWeight(tableId: String, lineId: String, kg: Double) {
+        require(kg > 0) { "Số ký phải lớn hơn 0" }
+        val order = openOrders.getValue(tableId)
+        save(order.copy(lines = order.lines.map { if (it.id == lineId) it.copy(weightKg = kg) else it }))
+    }
+
     /** Changes the price for this table only; the menu price is untouched. */
     fun setLinePrice(tableId: String, lineId: String, price: Vnd) {
         require(price >= 0)
         val order = openOrders.getValue(tableId)
         save(order.copy(lines = order.lines.map { if (it.id == lineId) it.copy(unitPrice = price) else it }))
+    }
+
+    /**
+     * Corrects when guests entered a room (e.g. opened late in the app). Rooms only; never in
+     * the future. Returns false when refused.
+     */
+    fun setRoomStart(tableId: String, openedAt: Long): Boolean {
+        val order = openOrders[tableId] ?: return false
+        if (!zoneOf(tableOf(tableId)).timed || openedAt > clock.now()) return false
+        save(order.copy(openedAt = openedAt))
+        return true
     }
 
     /** null restores the time-based fee. */
@@ -250,19 +274,26 @@ class PosEngine(
     private fun allTablesInOrder(): List<Table> =
         tables.values.sortedWith(compareBy({ zoneOf(it).sort }, { it.number }))
 
-    /** Empty tables of the same kind (normal ↔ normal, room ↔ room). */
+    /**
+     * Empty tables a group can move to. A normal table may go to any empty table or room; a room
+     * only to another room (moving out would drop the time already billed).
+     */
     fun moveTargets(fromTableId: String): List<TableView> {
-        val timed = zoneOf(tableOf(fromTableId)).timed
+        val fromRoom = zoneOf(tableOf(fromTableId)).timed
         return allTablesInOrder()
-            .filter { it.id != fromTableId && it.id !in openOrders && zoneOf(it).timed == timed }
+            .filter { it.id != fromTableId && it.id !in openOrders && (!fromRoom || zoneOf(it).timed) }
             .map { view(it) }
     }
 
-    /** A room keeps its clock (opening time); the new room's rate applies. */
+    /**
+     * Room → room keeps its clock and takes the new room's rate. Table → room starts the room
+     * clock at the moment of the move.
+     */
     fun moveTable(fromTableId: String, toTableId: String) {
         require(moveTargets(fromTableId).any { it.table.id == toTableId }) { "Không chuyển được sang bàn này" }
         val order = openOrders.remove(fromTableId) ?: return
-        save(order.copy(tableId = toTableId))
+        val intoRoomFromTable = zoneOf(tableOf(toTableId)).timed && !zoneOf(tableOf(fromTableId)).timed
+        save(order.copy(tableId = toTableId, openedAt = if (intoRoomFromTable) clock.now() else order.openedAt))
     }
 
     /** Other occupied tables. A room cannot be merged away, or its room fee would be lost. */
@@ -277,7 +308,8 @@ class PosEngine(
         val from = openOrders.getValue(fromTableId)
         var lines = openOrders.getValue(intoTableId).lines
         for (l in from.lines.sortedBy { it.seq }) {
-            val same = lines.firstOrNull { it.menuItemId == l.menuItemId && it.unitPrice == l.unitPrice }
+            val same = if (l.weightKg != null) null
+            else lines.firstOrNull { it.menuItemId == l.menuItemId && it.unitPrice == l.unitPrice && it.weightKg == null }
             lines = if (same != null) {
                 lines.map { if (it.id == same.id) it.copy(quantity = it.quantity + l.quantity) else it }
             } else {
@@ -354,7 +386,7 @@ class PosEngine(
             placeLabel = place,
             openedAt = o.openedAt,
             printedAt = clock.now(),
-            items = o.lines.sortedBy { it.seq }.map { ReceiptItem(it.name, it.quantity, it.unitPrice ?: 0, it.amount ?: 0) },
+            items = o.lines.sortedBy { it.seq }.map { ReceiptItem(it.name, it.quantity, it.unitPrice ?: 0, it.amount ?: 0, it.weightKg) },
             roomFeeLabel = fee?.let {
                 "Tiền phòng ${place.removePrefix("Phòng ")} – ${RoomFee.billedDurationText((o.closedAt ?: o.openedAt) - o.openedAt)}"
             },
@@ -469,7 +501,7 @@ class PosEngine(
             openedAt = order.openedAt,
             printedAt = at,
             items = order.lines.sortedBy { it.seq }.map {
-                ReceiptItem(it.name, it.quantity, it.unitPrice ?: 0, it.amount ?: 0)
+                ReceiptItem(it.name, it.quantity, it.unitPrice ?: 0, it.amount ?: 0, it.weightKg)
             },
             roomFeeLabel = fee?.let { roomFeeLabel(order, at) },
             roomFee = fee,

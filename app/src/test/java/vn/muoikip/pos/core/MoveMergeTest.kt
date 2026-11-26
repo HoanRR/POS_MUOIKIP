@@ -25,15 +25,44 @@ class MoveMergeTest {
         assertEquals(50_000L, engine.order(to)!!.total)
     }
 
-    @Test fun cannotMoveToOccupiedTableOrAcrossRoomAndTable() {
+    @Test fun cannotMoveToOccupiedTableOrToItself() {
         val from = table("Sân trước", 1)
         val busy = table("Sân trước", 2)
         engine.addItem(from, item("Hến xào"))
         engine.addItem(busy, item("Rau xào"))
         val targets = engine.moveTargets(from).map { it.table.id }
         assertFalse(busy in targets)
-        assertFalse(table("VIP", 1) in targets)
         assertFalse(from in targets)
+    }
+
+    @Test fun tableCanMoveIntoEmptyRoomAndRoomClockStartsAtTheMove() {
+        val from = table("Sân trước", 1)
+        engine.addItem(from, item("Hến xào"))               // 50.000
+        clock.advanceMinutes(45)                             // eating outside first
+        val vip = table("VIP", 2)
+        assertTrue(vip in engine.moveTargets(from).map { it.table.id })
+
+        engine.moveTable(from, vip)
+
+        assertFalse(engine.table(from).occupied)
+        assertEquals(0L, engine.table(vip).elapsedMs)        // clock starts now, not 45 minutes ago
+        assertEquals(100_000L, engine.order(vip)!!.roomFee)  // minimum hour
+        assertEquals(150_000L, engine.order(vip)!!.total)
+        clock.advanceMinutes(70)
+        assertEquals(125_000L, engine.order(vip)!!.roomFee)  // 1h10 -> 1h15
+    }
+
+    @Test fun occupiedRoomIsNotAMoveTarget() {
+        val from = table("Sân trước", 1)
+        engine.addItem(from, item("Hến xào"))
+        engine.openRoom(table("VIP", 1))
+        assertFalse(table("VIP", 1) in engine.moveTargets(from).map { it.table.id })
+    }
+
+    @Test fun roomCannotMoveOutToNormalTable() {
+        val vip = table("VIP", 1)
+        engine.openRoom(vip)
+        assertFalse(engine.moveTargets(vip).any { !it.zone.timed })
     }
 
     @Test fun movingRoomKeepsItsClockAndUsesNewRate() {
@@ -50,10 +79,10 @@ class MoveMergeTest {
     @Test fun mergeAddsLinesIntoTargetAndFreesSource() {
         val a = table("Sân trước", 1)
         val b = table("Sân trước", 2)
-        engine.addItem(a, item("Bia Tiger"))
-        engine.addItem(a, item("Bia Tiger"))
+        engine.addItem(a, item("Bia Tiger lớn"))
+        engine.addItem(a, item("Bia Tiger lớn"))
         engine.addItem(a, item("Hến xào"))
-        engine.addItem(b, item("Bia Tiger"))
+        engine.addItem(b, item("Bia Tiger lớn"))
         engine.addItem(b, item("Tôm sông"))
         engine.setLinePrice(b, engine.order(b)!!.order.lines.first { it.name == "Tôm sông" }.id, 150_000)
 
@@ -62,7 +91,7 @@ class MoveMergeTest {
 
         assertFalse(engine.table(a).occupied)
         val lines = engine.order(b)!!.order.lines.associate { it.name to (it.quantity to it.unitPrice) }
-        assertEquals(mapOf("Bia Tiger" to (3 to 20_000L), "Tôm sông" to (1 to 150_000L), "Hến xào" to (1 to 50_000L)), lines)
+        assertEquals(mapOf("Bia Tiger lớn" to (3 to 20_000L), "Tôm sông" to (1 to 150_000L), "Hến xào" to (1 to 50_000L)), lines)
         assertEquals(260_000L, engine.order(b)!!.total)
     }
 

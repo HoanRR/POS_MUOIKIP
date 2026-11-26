@@ -39,6 +39,7 @@ import java.util.Locale
 
 @Composable
 fun ReportPanel(engine: PosEngine) {
+    engine.observeChanges()
     var dayAt by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val (from, until) = BusinessDay.range(dayAt)
     val report = engine.report(from, until)
@@ -93,6 +94,8 @@ fun ReportPanel(engine: PosEngine) {
 
 @Composable
 fun ZonesPanel(engine: PosEngine) {
+    engine.observeChanges()
+    val zonesWithTables = engine.zones().map { it to engine.tables(it.id) }
     var renaming by remember { mutableStateOf<Zone?>(null) }
     var deletingZone by remember { mutableStateOf<Zone?>(null) }
     var deletingTable by remember { mutableStateOf<TableView?>(null) }
@@ -100,7 +103,7 @@ fun ZonesPanel(engine: PosEngine) {
     var message by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(Modifier.fillMaxSize().background(Color.White).padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(engine.zones(), key = { it.id }) { z ->
+        items(zonesWithTables, key = { it.first.id }) { (z, zoneTables) ->
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(z.name + if (z.timed) " (tính giờ)" else "", style = typeFor(28), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
@@ -109,7 +112,7 @@ fun ZonesPanel(engine: PosEngine) {
                         if (engine.canDeleteZone(z.id)) deletingZone = z else message = "Khu ${z.name} còn bàn đang có khách (hoặc là khu cuối cùng)."
                     }, color = PosColors.Chip, textColor = PosColors.Danger, height = 60.dp)
                 }
-                engine.tables(z.id).chunked(6).forEach { row ->
+                zoneTables.chunked(6).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         row.forEach { t ->
                             Column(Modifier.weight(1f).background(PosColors.Chip).padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -153,6 +156,7 @@ fun ZonesPanel(engine: PosEngine) {
 
 @Composable
 fun PinPanel(engine: PosEngine) {
+    engine.observeChanges()
     var entering by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }

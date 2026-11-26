@@ -56,6 +56,15 @@ abstract class PosStoreContract {
         assertEquals(order.lines, loaded.lines.sortedBy { it.seq })
     }
 
+    @Test fun weighedLinesAndMenuFlagRoundTrip() {
+        val s = newStore()
+        s.saveMenuItem(MenuItem("m1", "c1", "Ba ba", 700_000, 1, soldByWeight = true))
+        s.saveOrder(Order("o1", "t1", 1_000, lines = listOf(OrderLine("l1", "m1", "Ba ba", 1, 700_000, 1, weightKg = 1.25))))
+        val snap = reopen().load()
+        assertEquals(true, snap.menuItems.single().soldByWeight)
+        assertEquals(1.25, snap.openOrders.single().lines.single().weightKg!!, 0.0)
+    }
+
     @Test fun savingOrderReplacesItsLines() {
         val s = newStore()
         val line1 = OrderLine("l1", "m1", "Rau xào", 1, 30_000, 1)

@@ -27,6 +27,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -117,8 +118,8 @@ fun BigButton(
 
 /** Digits pad for money. Keys: 1–9, 000, 0, ⌫ and C. */
 @Composable
-fun NumberPad(value: Vnd, onChange: (Vnd) -> Unit, modifier: Modifier = Modifier, keyHeight: Dp = 72.dp) {
-    val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "000", "0", "⌫")
+fun NumberPad(value: Vnd, onChange: (Vnd) -> Unit, modifier: Modifier = Modifier, keyHeight: Dp = 72.dp, money: Boolean = true) {
+    val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", if (money) "000" else "00", "0", "⌫")
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         keys.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -154,21 +155,92 @@ fun NumberPadDialog(
     onConfirm: (Vnd) -> Unit,
     extraLabel: String? = null,
     onExtra: (() -> Unit)? = null,
+    /** false for plain counts (quantity): no "đ", no "000" key. */
+    showMoney: Boolean = true,
 ) {
-    var value by remember { mutableLongStateOf(initial) }
+    // Counts start empty so typing "12" gives 12, not "112".
+    var value by remember { mutableLongStateOf(if (showMoney) initial else 0L) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title, style = typeFor(28), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(formatVnd(value), style = typeFor(44), fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End)
-                NumberPad(value, { value = it }, keyHeight = 64.dp)
+                Text(
+                    if (showMoney) formatVnd(value) else if (value == 0L) "Đang có: $initial" else "$value",
+                    style = typeFor(44), fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End,
+                    color = if (!showMoney && value == 0L) PosColors.Muted else PosColors.Ink,
+                )
+                NumberPad(value, { value = it }, keyHeight = 64.dp, money = showMoney)
                 if (extraLabel != null && onExtra != null) {
                     BigButton(extraLabel, onExtra, Modifier.fillMaxWidth(), color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp)
                 }
             }
         },
-        confirmButton = { BigButton("Xong", { onConfirm(value) }, color = PosColors.Pay) },
+        confirmButton = {
+            BigButton("Xong", { onConfirm(if (!showMoney && value == 0L) initial else value) }, color = PosColors.Pay)
+        },
+        dismissButton = { BigButton("Hủy", onDismiss, color = PosColors.Chip, textColor = PosColors.Ink) },
+    )
+}
+
+/**
+ * Decimal entry for weights (e.g. 1,25 kg). Comma is the Vietnamese decimal mark; shows the
+ * resulting amount live when a unit price is known.
+ */
+@Composable
+fun DecimalPadDialog(
+    title: String,
+    initial: Double,
+    unit: String,
+    pricePerUnit: Vnd?,
+    onDismiss: () -> Unit,
+    onConfirm: (Double) -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    val value = text.replace(',', '.').toDoubleOrNull()
+    val shown = value ?: initial
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, style = typeFor(28), fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    if (text.isEmpty()) "Đang có: ${vn.muoikip.pos.core.formatKg(initial)} $unit" else "$text $unit",
+                    style = typeFor(44), fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End,
+                    color = if (text.isEmpty()) PosColors.Muted else PosColors.Ink,
+                )
+                if (pricePerUnit != null) {
+                    Text(
+                        "= ${formatVnd(Math.round(pricePerUnit * shown))}",
+                        style = typeFor(24), color = PosColors.Primary, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End,
+                    )
+                }
+                listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "⌫").chunked(3).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { k ->
+                            BigButton(
+                                k,
+                                {
+                                    text = when (k) {
+                                        "⌫" -> text.dropLast(1)
+                                        "," -> if (',' in text) text else (text.ifEmpty { "0" } + ",")
+                                        else -> {
+                                            val decimals = text.substringAfter(',', "")
+                                            if (',' in text && decimals.length >= 3) text else (text + k).take(7)
+                                        }
+                                    }
+                                },
+                                Modifier.weight(1f), color = PosColors.Chip, textColor = PosColors.Ink, height = 64.dp, fontSize = 30,
+                            )
+                        }
+                    }
+                }
+                BigButton("Xóa hết", { text = "" }, Modifier.fillMaxWidth(), color = PosColors.Chip, textColor = PosColors.Danger, height = 60.dp)
+            }
+        },
+        confirmButton = {
+            BigButton("Xong", { onConfirm(value ?: initial) }, color = PosColors.Pay, enabled = (value ?: initial) > 0.0)
+        },
         dismissButton = { BigButton("Hủy", onDismiss, color = PosColors.Chip, textColor = PosColors.Ink) },
     )
 }
@@ -253,3 +325,11 @@ fun elapsedText(ms: Long): String {
 fun SectionPadding(content: @Composable () -> Unit) {
     Column(Modifier.padding(16.dp)) { content() }
 }
+
+/**
+ * Subscribes the calling composable to engine changes. Needed in every composable that reads
+ * engine data but only receives the (unchanging) engine instance: with strong skipping, Compose
+ * would otherwise skip it and show stale data (bug: "Ẩn" in Thực đơn seemed to do nothing).
+ */
+@Composable
+fun vn.muoikip.pos.core.PosEngine.observeChanges(): Int = revision.collectAsState().value

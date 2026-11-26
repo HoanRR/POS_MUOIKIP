@@ -88,8 +88,10 @@ fun SettingsScreen(engine: PosEngine, refresh: Int, actions: SettingsActions, on
 
 @Composable
 private fun MenuEditor(engine: PosEngine) {
+    engine.observeChanges()
     val categories = engine.categories()
     var categoryId by rememberSaveable { mutableStateOf(categories.first().id) }
+    val editingItems = engine.menuForEditing(categoryId)
     var editing by remember { mutableStateOf<MenuItem?>(null) }
     var adding by remember { mutableStateOf(false) }
     var addingCategory by remember { mutableStateOf(false) }
@@ -109,14 +111,14 @@ private fun MenuEditor(engine: PosEngine) {
         Column(Modifier.weight(1f).fillMaxHeight().background(Color.White).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             BigButton("+ Thêm món", { adding = true }, color = PosColors.Pay)
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(engine.menuForEditing(categoryId), key = { it.id }) { item ->
+                items(editingItems, key = { it.id }) { item ->
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(
                             item.name, style = typeFor(24), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
                             color = if (item.active) PosColors.Ink else PosColors.Muted,
                         )
                         Text(
-                            if (!item.active) "Đang ẩn" else item.price?.let { formatVnd(it) } ?: "Giá nhập khi bán",
+                            if (!item.active) "Đang ẩn" else item.price?.let { formatVnd(it) + if (item.soldByWeight) "/kg" else "" } ?: "Giá nhập khi bán",
                             style = typeFor(22), color = if (item.active) PosColors.Ink else PosColors.Danger,
                         )
                         BigButton("Sửa", { editing = item }, color = PosColors.Chip, textColor = PosColors.Primary, height = 60.dp)
@@ -134,16 +136,16 @@ private fun MenuEditor(engine: PosEngine) {
 
     if (adding) {
         MenuItemDialog(
-            title = "Thêm món", initialName = "", initialPrice = null, initialCategoryId = categoryId, engine = engine,
+            title = "Thêm món", initialName = "", initialPrice = null, initialCategoryId = categoryId, initialByWeight = false, engine = engine,
             onDismiss = { adding = false },
-            onSave = { name, price, cat -> engine.addMenuItem(cat, name, price); adding = false },
+            onSave = { name, price, cat, byWeight -> engine.addMenuItem(cat, name, price, byWeight); adding = false },
         )
     }
     editing?.let { item ->
         MenuItemDialog(
-            title = "Sửa món", initialName = item.name, initialPrice = item.price, initialCategoryId = item.categoryId, engine = engine,
+            title = "Sửa món", initialName = item.name, initialPrice = item.price, initialCategoryId = item.categoryId, initialByWeight = item.soldByWeight, engine = engine,
             onDismiss = { editing = null },
-            onSave = { name, price, cat -> engine.updateMenuItem(item.id, name, price, cat); editing = null },
+            onSave = { name, price, cat, byWeight -> engine.updateMenuItem(item.id, name, price, cat, byWeight); editing = null },
         )
     }
     if (addingCategory) {
@@ -162,11 +164,13 @@ private fun MenuItemDialog(
     initialCategoryId: String,
     engine: PosEngine,
     onDismiss: () -> Unit,
-    onSave: (String, Vnd?, String) -> Unit,
+    initialByWeight: Boolean,
+    onSave: (String, Vnd?, String, Boolean) -> Unit,
 ) {
     var name by remember { mutableStateOf(initialName) }
     var price by remember { mutableStateOf(initialPrice) }
     var categoryId by remember { mutableStateOf(initialCategoryId) }
+    var byWeight by remember { mutableStateOf(initialByWeight) }
     var pickingPrice by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -186,6 +190,12 @@ private fun MenuItemDialog(
                     BigButton("Nhập khi bán", { price = null }, color = if (price == null) PosColors.Selected else PosColors.Chip,
                         textColor = if (price == null) Color.White else PosColors.Ink)
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BigButton("Bán theo phần", { byWeight = false }, Modifier.weight(1f),
+                        color = if (!byWeight) PosColors.Selected else PosColors.Chip, textColor = if (!byWeight) Color.White else PosColors.Ink, height = 60.dp, fontSize = 20)
+                    BigButton("Bán theo ký (giá/kg)", { byWeight = true }, Modifier.weight(1f),
+                        color = if (byWeight) PosColors.Selected else PosColors.Chip, textColor = if (byWeight) Color.White else PosColors.Ink, height = 60.dp, fontSize = 20)
+                }
                 Text("Nhóm:", style = typeFor(22))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     engine.categories().forEach { c ->
@@ -196,7 +206,7 @@ private fun MenuItemDialog(
                 }
             }
         },
-        confirmButton = { BigButton("Lưu", { onSave(name, price, categoryId) }, color = PosColors.Pay, enabled = name.isNotBlank()) },
+        confirmButton = { BigButton("Lưu", { onSave(name, price, categoryId, byWeight) }, color = PosColors.Pay, enabled = name.isNotBlank()) },
         dismissButton = { BigButton("Hủy", onDismiss, color = PosColors.Chip, textColor = PosColors.Ink) },
     )
     if (pickingPrice) {
@@ -223,6 +233,7 @@ fun TextInputDialog(title: String, initial: String = "", onDismiss: () -> Unit, 
 
 @Composable
 private fun BankPanel(engine: PosEngine) {
+    engine.observeChanges()
     val current = engine.bankAccount()
     var bin by remember { mutableStateOf(current?.bin) }
     var account by remember { mutableStateOf(current?.account.orEmpty()) }

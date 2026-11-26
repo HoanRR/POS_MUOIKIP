@@ -52,7 +52,7 @@ fun PaymentScreen(
             Text("Kiểm tra món – ${table.label}", style = typeFor(30), fontWeight = FontWeight.Black)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                 Text("Món", style = typeFor(20), color = PosColors.Muted, modifier = Modifier.weight(1f))
-                Text("SL", style = typeFor(20), color = PosColors.Muted, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
+                Text("SL", style = typeFor(20), color = PosColors.Muted, modifier = Modifier.width(110.dp), textAlign = TextAlign.Center)
                 Text("Thành tiền", style = typeFor(20), color = PosColors.Muted, modifier = Modifier.width(170.dp), textAlign = TextAlign.End)
             }
             HorizontalDivider()
@@ -64,7 +64,7 @@ fun PaymentScreen(
                             Text(l.unitPrice?.let { formatVnd(it) } ?: "Chưa nhập giá", style = typeFor(20),
                                 color = if (l.unitPrice == null) PosColors.Danger else PosColors.Muted)
                         }
-                        Text("${l.quantity}", style = typeFor(28), fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
+                        Text(l.weightKg?.let { "${vn.muoikip.pos.core.formatKg(it)}kg" } ?: "${l.quantity}", style = typeFor(28), fontWeight = FontWeight.Bold, modifier = Modifier.width(110.dp), textAlign = TextAlign.Center)
                         Text(l.amount?.let { formatVnd(it) } ?: "—", style = typeFor(26), fontWeight = FontWeight.Bold,
                             modifier = Modifier.width(170.dp), textAlign = TextAlign.End)
                     }
